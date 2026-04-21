@@ -19,6 +19,7 @@ data/
 Data/
 dataset/
 data_files/
+data/financial_docs
 
 # OS
 .DS_Store
