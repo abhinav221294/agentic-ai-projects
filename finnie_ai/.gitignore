@@ -14,6 +14,12 @@ venv/
 chroma_fin_db/
 */chroma_fin_db/
 
+#data
+data/
+Data/
+dataset/
+data_files/
+
 # OS
 .DS_Store
 Thumbs.db
