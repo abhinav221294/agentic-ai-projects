@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+
+# Env
+.env
+
+# Virtual environments
+finn_env/
+venv/
+*/finn_env/
+
+# Chroma DB (VERY IMPORTANT)
+chroma_fin_db/
+*/chroma_fin_db/
+
+# OS
+.DS_Store
+Thumbs.db

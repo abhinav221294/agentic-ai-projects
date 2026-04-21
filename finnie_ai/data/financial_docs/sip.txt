@@ -1,0 +1,58 @@
+Title: SIP (Systematic Investment Plan) Guide
+Source: Finnie AI Knowledge Base
+
+What is SIP?
+
+SIP (Systematic Investment Plan) is a method of investing a fixed amount of money regularly in a mutual fund. Instead of investing a large sum at once, investors contribute small amounts at fixed intervals such as monthly or weekly.
+
+How SIP Works
+An investor selects a mutual fund scheme.
+A fixed amount is chosen for regular investment.
+The amount is automatically deducted at regular intervals.
+Units are allocated based on the current NAV.
+Over time, investments accumulate and grow with market performance.
+Types of SIP
+Regular SIP
+
+A fixed amount is invested at regular intervals.
+
+Top-up SIP
+
+The investment amount is increased periodically.
+
+Flexible SIP
+
+The investment amount can be changed based on financial conditions.
+
+Trigger SIP
+
+Investments are made based on specific market conditions or triggers.
+
+Benefits of SIP
+
+Disciplined Investing: Encourages regular investment habits.
+Affordable: Allows investing with small amounts.
+Rupee Cost Averaging: Buys more units when prices are low and fewer when prices are high.
+Compounding: Returns generated are reinvested, leading to long-term growth.
+
+What is Rupee Cost Averaging?
+
+Rupee cost averaging is a strategy where a fixed amount is invested regularly regardless of market conditions. This results in buying more units when prices are low and fewer units when prices are high, reducing the overall cost per unit over time.
+
+Risks Involved
+
+Market Risk: Returns depend on market performance.
+No Guaranteed Returns: SIP does not assure profits.
+Long-Term Commitment: Benefits are more visible over a longer duration.
+
+Example
+
+If an investor invests Rs. 1000 every month:
+Month 1 NAV = 10 → Units = 100
+Month 2 NAV = 8 → Units = 125
+Month 3 NAV = 12 → Units = 83.33
+Total units accumulated over time help in averaging the cost.
+
+Final Thought
+
+SIP is a simple and effective way to invest regularly in mutual funds. It helps build wealth over time through disciplined investing, cost averaging, and the power of compounding.
