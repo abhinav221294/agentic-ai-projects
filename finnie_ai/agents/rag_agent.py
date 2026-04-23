@@ -100,7 +100,7 @@ def rag_agent(state: AgentState) -> AgentState:
     for m in memory[-3:]:
         conversation += f"\nUser: {m.get('user', '')}\nAssistant: {m.get('assistant', '')}\n"
 
-    llm = get_llm()
+    llm = get_llm(temperature=0.3, max_tokens=1000)
 
     final_prompt = f"""{RAG_PROMPT}
 IMPORTANT:

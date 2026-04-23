@@ -2,8 +2,7 @@ import streamlit as st
 import yfinance as yf
 
 from utils.stock_mapper import normalize_stock
-from agents.market_agent import get_finnhub_price
-
+from utils.price_utils import get_price
 
 def render_market_tab():
 
@@ -66,52 +65,40 @@ def render_market_tab():
                 st.caption("📊 Based on last 1 month data")
 
             except Exception:
-                price_data = get_finnhub_price(symbol, previous=True)
+                current_price = get_price(symbol)
 
-                if price_data:
-                    current = price_data.get("current", 0)
-                    prev = price_data.get("previous", 0)
+                if current_price:
+                    st.warning("⚠️ Showing live price (chart unavailable)")
 
-                    if current is None:
-                        st.error("❌ Market data unavailable (API issue)")
-                    else:
-                        change = (current - prev) if prev else 0
 
-                        # -------------------------
-                        # ✅ FIX 1: Restore warning banner
-                        # -------------------------
-                        st.warning("⚠️ Showing live price (chart unavailable)")
+                    # -------------------------
+                    # ✅ FIX 2: Restore 3-column layout
+                    # -------------------------
+                    col1, col2, col3 = st.columns(3)
 
-                        # -------------------------
-                        # ✅ FIX 2: Restore 3-column layout
-                        # -------------------------
-                        col1, col2, col3 = st.columns(3)
-
-                        with col1:
+                    with col1:
                             st.metric(
                                 label=f"{symbol} Price",
-                                value=round(current, 2),
-                                delta=round(change, 2)  # ✅ FIX 3: rounded value
+                                value=round(current_price, 2),
                             )
 
-                        with col2:
+                    with col2:
                             st.metric(
                                 label="📊 Data Source",
-                                value="Finnhub"
+                                value="Cached API"
                             )
 
-                        with col3:
-                            trend = "📈 Up" if change > 0 else "📉 Down"
-
+                    with col3:
+                        
                             st.metric(
                                 label="Trend",
-                                value=trend
+                                value="Live"
                             )
 
-                        # -------------------------
-                        # ✅ FIX 4: Restore caption
-                        # -------------------------
-                        st.caption("⚠️ Chart data unavailable, showing real-time price only")
+                    # -------------------------
+                    # ✅ FIX 4: Restore caption
+                    # -------------------------
+                    st.caption("⚠️ Chart data unavailable, showing real-time price only")
 
                 else:
                     st.error("❌ Unable to fetch market data right now")

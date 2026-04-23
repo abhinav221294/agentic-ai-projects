@@ -4,6 +4,8 @@ from utils.prompts import ADVISOR_PROMPT
 from agents.market_agent import get_finnhub_price
 from tools.rag_pipeline import RAGPipeline
 import json
+from utils.stock_mapper import STOCK_MAP,normalize_stock
+from utils.price_utils import get_price
 
 rag = RAGPipeline()
 
@@ -13,34 +15,51 @@ def advisor_agent(state: AgentState) -> AgentState:
     query = raw_query.lower()
 
     memory = state.get("memory", [])
-    context_text = " ".join([m.get("user", "") for m in memory[-3:]]).lower()
-    full_query = context_text + " " + query
+    #context_text = " ".join([m.get("user", "") for m in memory[-3:]]).lower()
+    full_query = query
 
     # -------------------------
     # Market info
     # -------------------------
-    stock_map = {
-        "tesla": "TSLA",
-        "apple": "AAPL",
-        "reliance": "RELIANCE.NS"
-    }
 
     market_info = ""
 
-    for name, symbol in stock_map.items():
-        if name in query:
-            price = get_finnhub_price(symbol)
-            if price:
-                market_info = f"{name.capitalize()} ({symbol}) current price is {price}"
-            break
+    if any(word in query for word in ["stock", "price", "buy", "sell"]):
+            symbol = normalize_stock(raw_query)
+            price = get_price(symbol)
 
-    rag_results = rag.retrieve(query=query) or []
+            if price:
+                market_info = f"{symbol} current price is {price}"
+
+    retrieval_prompt = f"""
+Decide whether this query needs knowledge retrieval.
+
+Return ONLY:
+YES or NO
+
+Rules:
+- YES → if query is asking for definition, concept, explanation
+- NO → if query is asking for advice, recommendation, decision
+
+Query:
+{full_query}
+"""
+    llm = get_llm()
+    retrieval_decision = llm.invoke(retrieval_prompt).content.strip().upper()
+
+    if "YES" in retrieval_decision:
+        rag_results = rag.retrieve(query=query) or []
+    else:
+        rag_results = []
 
     context_docs = "\n\n".join(
         r.get("content", "") for r in rag_results[:2]
     )
 
-    context_docs = context_docs if context_docs.strip() else "No relevant knowledge found."
+    if context_docs.strip() and retrieval_decision == "YES":
+        knowledge_section = context_docs
+    else:
+        knowledge_section = "None"
 
     # -------------------------
     # Conversation
@@ -49,147 +68,197 @@ def advisor_agent(state: AgentState) -> AgentState:
     for m in memory[-3:]:
         conversation += f"\nUser: {m.get('user', '')}\nAssistant: {m.get('assistant', '')}\n"
 
-    llm = get_llm()
+    detail_signals = [
+    "in detail",
+    "more details",
+    "explain more",
+    "not clear",
+    "don't understand",
+    "clarify"
+    ]
 
     # -------------------------
     # 🔥 STEP 1: Strategy (JSON)
     # -------------------------
-    strategy_prompt = f"""
-You are an expert financial analyst.
+    strategy_prompt = f"""You are an expert financial analyst.
 
-Deeply analyze the user's intent, not just classify.
+Your job is NOT just to classify.
+
+You MUST:
+- deeply understand the user context
+- generate a personalized investment approach
 
 Extract:
-- risk tolerance (low / medium / high)
-- investment strategy (conservative / balanced / aggressive)
-- user goal (wealth, income, safety, etc.)
-- time horizon (short / medium / long)
-- reasoning (why)
+- risk tolerance
+- strategy
+- user goal
+- time horizon
+- recommended portfolio allocation (in %)
+- reasoning
 
-Return STRICT JSON only:
+Return STRICT JSON:
 {{
-  "risk": "low/medium/high/unknown",
-  "strategy": "conservative/balanced/aggressive/unknown",
+  "risk": "...",
+  "strategy": "...",
   "user_goal": "...",
   "time_horizon": "...",
+  "allocation": "e.g. 60% balanced fund + 40% index fund",
   "reason": "..."
 }}
 
-Be precise and infer missing details if needed.
+IMPORTANT:
+- The allocation MUST be different for different users
+- Do NOT give generic outputs
 
 Query:
 {full_query}
 """
 
     try:
-        strategy_response = llm.invoke(strategy_prompt)
 
-        parsed = json.loads(
-            strategy_response.content.strip().replace("```json", "").replace("```", "")
-        )
+        simple_signals = [
+    "where should i invest",
+    "should i invest",
+    "what should i do"
+        ]
 
-        strategy = parsed.get("strategy", "unknown")
-        risk = parsed.get("risk", "unknown")
-        reason = parsed.get("reason", "")
-        goal = parsed.get("user_goal", "")
-        horizon = parsed.get("time_horizon", "")
+
+        detail_signals = [
+        "in detail",
+        "more details",
+        "explain more",
+        "not clear",
+        "don't understand",
+        "clarify"
+        ]
+
+        if any(s in query for s in detail_signals):
+            mode = "DETAIL"
+        elif any(s in query for s in simple_signals):
+            mode = "SIMPLE"
+        else:
+            mode = "AUTO"
+
+      
+        if mode != "DETAIL":
+            strategy_response = llm.invoke(strategy_prompt)
+
+            parsed = json.loads(
+                strategy_response.content.strip().replace("```json", "").replace("```", "")
+            )
+
+            strategy = parsed.get("strategy", "unknown")
+            risk = parsed.get("risk", "unknown")
+            #reason = parsed.get("reason", "")
+            goal = parsed.get("user_goal", "")
+            horizon = parsed.get("time_horizon", "")
+            allocation = parsed.get("allocation", "")
+        else:
+            # 🔥 DO NOT recompute for follow-ups
+            strategy = "same as previous"
+            risk = "same as previous"
+            goal = ""
+            horizon = ""
+            allocation = ""
+        
+        if mode != "DETAIL":
+            if not allocation or allocation.strip() == "":
+                allocation = "60% Nifty 50 index fund + 40% balanced advantage fund"
 
     except Exception:
         strategy = "balanced"
         risk = "medium"
-        reason = ""
+        #reason = ""
+    
+    profile_section = f"""- Risk: {risk}
+- Strategy: {strategy}"""
 
+    if goal:
+        profile_section += f"\n- Goal: {goal}"
+    if horizon:
+        profile_section += f"\n- Time Horizon: {horizon}"
+
+    last_answer = ""
+
+    for m in reversed(memory):
+        if m.get("assistant"):
+            last_answer = m["assistant"]
+            break
+    allocation_section = allocation if mode != "DETAIL" else "Use previous recommendation"
     # -------------------------
     # 🔥 STEP 2: Generate answer
     # -------------------------
     final_prompt = f"""{ADVISOR_PROMPT}
 
-You are a thoughtful financial advisor.
+### RESPONSE MODE
+{mode}
 
-Your job is to:
-1. Understand the user's situation
-2. Analyze risk tolerance and goals
-3. Compare options if needed
-4. Provide clear, structured advice
-
-Conversation:
-{conversation}
-
-User Query:
+### USER QUERY
 {full_query}
 
-Inferred Risk Profile (may be uncertain): {risk}
-Inferred Strategy (may be uncertain): {strategy}
-Inference Reason: {reason}
+### PREVIOUS RECOMMENDATION
+{last_answer if last_answer else "None"}
 
-Relevant Knowledge:
-{context_docs}
+### CONTEXT (Recent Conversation)
+{conversation if conversation else "None"}
 
-Market Data:
-{market_info}
+- Risk: {risk}
+- Strategy: {strategy}
+- Goal: {goal}
+- Time Horizon: {horizon}
 
-User Goal:
-{goal}
+### USER PROFILE (Inferred)
+{profile_section}
 
-Time Horizon: 
-{horizon}
+### PORTFOLIO / MARKET CONTEXT
+{market_info if market_info else "None"}
 
-IMPORTANT:
-- First internally analyze the problem step-by-step.
--Then produce the final structured answer.
--Do NOT skip reasoning.
-- If query is complex, break it into parts
-- If comparing options, show pros & cons
-- Always justify your recommendation
-- Use the "Relevant Knowledge" section if it is useful. Do not ignore it.
-- If user intent is unclear, make reasonable assumptions and proceed.
+### PORTFOLIO ALLOCATION (MANDATORY - MUST FOLLOW)
+{allocation_section}
 
-OUTPUT FORMAT:
+### RELEVANT KNOWLEDGE
+{knowledge_section}
 
-Decision
-- (Clear stance: Yes / No / Conditional)
+If RESPONSE MODE != DETAIL and allocation is provided:
+- You MUST use it
 
-Understanding of User
-Analysis
+If RESPONSE MODE = DETAIL:
+- Ignore PORTFOLIO ALLOCATION
+- Use PREVIOUS RECOMMENDATION instead
+
+DETAIL MODE (CRITICAL):
+
+If RESPONSE MODE = DETAIL:
+- You MUST use the structure below
+- You MUST expand the answer
+- You MUST NOT give a short answer
+
+
+Required Structure:
+
 Recommendation
-Suggested Options:
-- ALWAYS write options like:
-  1. Equity Mutual Funds
-     - Pros: ...
-     - Cons: ...
-  2. Fixed Deposits
-     - Pros: ...
-     - Cons: ...
+-Provide allocation in %.
 
-- NEVER break number and title into separate lines
-- DO NOT write:
-  1.
-  Equity Mutual Funds
+If user has provided budget:
+- also include ₹ split
+Else:
+- DO NOT include ₹ values
 
-Keep it simple but insightful.
-IMPORTANT:
-- Do NOT assume user risk profile unless explicitly stated
-- If information is missing, clearly say assumptions
-- Use phrases like:
-  - "If your risk tolerance is..."
-  - "Assuming a moderate risk level..."
-- Avoid stating user preferences as facts
+Breakdown
+- Explain each investment and its role
 
-CRITICAL INSTRUCTION:
-- The inferred risk profile and strategy may be uncertain
-- Do NOT assume them as facts
-- If user has not explicitly stated preferences, acknowledge uncertainty
-- Use conditional language like:
-  - "If your risk tolerance is..."
-  - "Assuming a moderate risk profile..."
-- Never state inferred traits as confirmed facts
-- You MUST take a stance when possible:
-  - "Yes, but..."
-  - "No, unless..."
-  - "Only if..."
-- Do not stay neutral unless necessary
-- Avoid generic advice like "diversify" unless it adds value
+Why this works
+- Explain how allocation balances risk and return
+
+Next Steps
+- Clear actionable steps (platform + SIP split)
+
+If this structure is not followed, the answer is INVALID.
+
+- Avoid repeating the same sentence
+- Add clarity, not length
 """
+
 
     try:
         response = llm.invoke(final_prompt)

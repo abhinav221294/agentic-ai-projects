@@ -9,18 +9,25 @@ __pycache__/
 finn_env/
 venv/
 */finn_env/
+yf_env/
+*/yf_env/
 
 # Chroma DB (VERY IMPORTANT)
 chroma_fin_db/
 */chroma_fin_db/
 
-#data
+# Data
 data/
-Data/
+*/data/
 dataset/
-data_files/
-data/financial_docs
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Databases
+*.db
+*.sqlite
+
+# Streamlit
+.streamlit/

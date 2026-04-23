@@ -3,172 +3,133 @@ from utils.llm import get_llm
 from utils.prompts import ROUTER_PROMPT
 import re
 
-VALID_CATEGORIES = {"market", "risk", "advisor", "news", "rag"}
+VALID_CATEGORIES = {"market", "risk", "advisor", "news", "rag", "none"}
 
-
-# ---------------------------------------------------
-#OLD VERSION (Rule-based router returning new dict)
-# ---------------------------------------------------
-# This was your initial implementation.
-# It directly returned a new dictionary with "route".
-#
-#  Issues:
-# - Not aligned with AgentState structure
-# - Breaks shared state flow
-# - Harder to scale in multi-agent systems
-#
-#def router_agent(state: dict) -> dict:
-#    query = state["query"].lower()
-#
-#    market_keywords = ["price", "stock", "market", "value"]
-#    risk_keywords = ["risk", "volatility", "loss", "danger"]
-#    advisor_keywords = ["invest", "investment", "portfolio", "buy", "sell"]
-#
-#    if any(word in query for word in market_keywords):
-#        return {"route": "market"}
-#    
-#    elif any(word in query for word in risk_keywords):
-#        return {"route": "risk"}
-#    
-#    elif any(word in query for word in advisor_keywords):
-#        return {"route": "advisor"}
-#    
-#    else:
-#        return {"route": "rag"}
-#    
-
-
-# ---------------------------------------------------
-# NEW VERSION (State-based router - Recommended)
-# ---------------------------------------------------
-# This version uses AgentState and modifies it directly.
-# This is the correct approach for:
-# - Multi-agent systems
-# - LangGraph workflows
-# - Scalable architecture
 
 def router_agent(state: AgentState) -> AgentState:
-    """
-    Router Agent
 
-    Purpose:
-    - Classifies user query into a category
-    - Updates the shared state with routing decision
-
-    Categories:
-    - market   → stock prices, market data
-    - risk     → risk analysis, volatility
-    - advisor  → investment advice
-    - rag      → fallback (general queries)
-
-    Args:
-        state (AgentState):
-            {
-                "query": str,
-                "category": str,
-                "answer": str
-            }
-
-    Returns:
-        AgentState (updated with category)
-    """
-
-    # ---------------------------------------------------
-    # Step 1: Normalize query
-    # ---------------------------------------------------
-    # Convert query to lowercase for case-insensitive matching
-    
-    raw_query = state["query"]
-    query = raw_query.lower()
-
+    query = state["query"]
+    query_lower = query.lower()
     memory = state.get("memory", [])
 
-    #context_text = " ".join([m.get("user", "") for m in memory[-3:]]).lower()
+    FINANCE_KEYWORDS = [
+    "stock", "market", "price", "nifty", "sensex",
+    "investment", "invest", "portfolio", "sip",
+    "mutual fund", "etf", "bond", "equity", "debt",
+    "risk", "volatility", "return", "dividend",
+    "crypto", "trading"]
 
-    #full_query = context_text + " " + query
-    full_query = query
+    is_follow_up = len(memory) > 0 and any(
+    query_lower in m.get("user", "").lower()
+    for m in memory[-2:]
+    )
 
-    if state.get("clarification_needed"):
+    # 🔹 Allow definition-type queries (handled later)
+    is_definition = query_lower.startswith(("what is", "define", "explain"))
+
+    # 🔴 HARD STOP (only if clearly non-finance AND not follow-up)
+    if not any(word in query_lower for word in FINANCE_KEYWORDS) and not is_follow_up and not is_definition:
+        print("[Router] Non-finance query detected → stopping")
+        state["category"] = "none"
+        return state
+
+    # ---------------------------------------------------
+    # 🔹 RULE-BASED ROUTING (FAST PATH)
+    # ---------------------------------------------------
+
+    # Market
+    if any(word in query_lower for word in ["price", "stock", "nifty", "sensex", "share"]):
+        state["category"] = "market"
+        return state
+
+    # Risk
+    if any(word in query_lower for word in ["risk", "volatility", "loss", "danger", "safe"]):
+        state["category"] = "risk"
+        return state
+
+    # Advisor
+    if any(word in query_lower for word in ["invest", "investment", "buy", "sell", "portfolio", "should i"]):
         state["category"] = "advisor"
         return state
 
-    # ---------------------------------------------------
-    # Step 2: Define keyword groups for each category
-    # ---------------------------------------------------
-    # These keywords act as simple intent classifiers
-
-    
-    # ---------------------------------------------------
-    # Step 3: Routing logic
-    # ---------------------------------------------------
-    # Check if any keyword exists in query using:
-    # any() → returns True if at least one match is found
-
-    # # ---------------------------------------------------
-    # Step 3: Routing logic (FIXED)
-    # ---------------------------------------------------
-    
-
-    # 🔹 Definition queries → RAG
-    if full_query.startswith("what is") or full_query.startswith("define"):
-        state["category"] = "rag"
-
-    if "news" in full_query:
+    # News
+    if any(word in query_lower for word in ["news", "latest", "update", "headline"]):
         state["category"] = "news"
         return state
-    
-    try:
-        llm = get_llm()
-        prompt = f"""{ROUTER_PROMPT}
 
-You are a strict intent classifier.
+    # RAG (definitions)
+    if query_lower.startswith(("what is", "define", "explain")):
+        if any(word in query_lower for word in FINANCE_KEYWORDS):
+            state["category"] = "rag"
+        else:
+            state["category"] = "none"
+        return state
+    
+
+    # ---------------------------------------------------
+    # 🔹 BUILD CONTEXT (for LLM)
+    # ---------------------------------------------------
+
+    conversation = ""
+    for m in memory[-4:]:
+        conversation += f"User: {m.get('user', '')}\nAssistant: {m.get('assistant', '')}\n"
+
+    full_input = f"""Conversation:
+{conversation}
+
+User Query:
+{query}
 
 IMPORTANT:
-- If the query asks for advice, recommendation, or decision → advisor
-- If the query asks for price/data only → market
-- If asking about safety → risk
-- If asking news → news
-- Else → rag
+- If the query is a follow-up (e.g., "what should I do with it", "explain more"):
+  → Continue naturally from previous conversation
+  → Do NOT restart explanation
+  → Do NOT repeat full analysis
+  → Give a direct, simple answer
 
-Query:
-{full_query}
-
-Return ONLY one word:
-market / risk / advisor / news / rag
+- Only give detailed structured responses when explicitly needed
 """
-        
-        reponse = llm.invoke(prompt)
-        raw_output = reponse.context.strip().lower()
-        category = re.sub(r"[^a-z]","", raw_output)
 
-        if category in VALID_CATEGORIES:
-            state["category"] = category
+    # ---------------------------------------------------
+    # 🔹 LLM ROUTING (FALLBACK)
+    # ---------------------------------------------------
+
+    try:
+        llm = get_llm()
+
+        response = llm.invoke(f"""{ROUTER_PROMPT}
+
+{full_input}
+""")
+
+        raw_output = response.content.strip().lower()
+
+        # Clean + tokenize
+        clean_output = re.sub(r"[^a-z]", " ", raw_output)
+        tokens = clean_output.split()
+
+        # Priority-based deterministic routing
+        PRIORITY = ["risk", "advisor", "market", "news", "rag", "none"]
+
+        matched_category = None
+        for category in PRIORITY:
+            if category in tokens:
+                matched_category = category
+                break
+
+        if matched_category:
+            state["category"] = matched_category
             return state
-        
+        else:
+            print(f"[Router Warning] Unexpected output: {raw_output}")
+            state["category"] = "none"
+            return state
 
-    except:
-        pass
-    # -------------------------
-    # 🔒 Guardrail 5: Rule-based fallback (SAFE)
-    # -------------------------
-    market_keywords = ["price", "stock", "market", "value"]
-    risk_keywords = ["risk","risky", "volatility", "loss", "danger","safe"]
-    advisor_keywords = ["invest", "investment", "portfolio", "buy", "sell"]
-    news_keywords = ["news", "headlines", "updates"]
+    except Exception as e:
+        print(f"[Router Error] {e}")
 
-    if any(word in full_query for word in advisor_keywords):
-        state["category"] = "advisor"
-
-    elif any(word in full_query for word in market_keywords):
-        state["category"] = "market"
-
-    elif any(word in full_query for word in risk_keywords):
-        state["category"] = "risk"
-
-    elif any(word in full_query for word in news_keywords):
-        state["category"] = "news"
-
-    else:
-        state["category"] = "rag"
-
+    # ---------------------------------------------------
+    # 🔹 SAFE FALLBACK
+    # ---------------------------------------------------
+    state["category"] = "none"
     return state

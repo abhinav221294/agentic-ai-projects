@@ -13,6 +13,7 @@ def render_chat_tab():
 
     if "pending_query" not in st.session_state:
         st.session_state.pending_query = None
+        st.session_state.current_index = None
 
     # -------------------------------
     # Header
@@ -21,7 +22,7 @@ def render_chat_tab():
 
     with col1:
         st.markdown("""
-        <h3 style='margin-bottom:2px;'>💬 Assistant</h3>
+        <h2 style='margin-bottom:2px;'>💬 Assistant</h2>
         <p style='color:gray; margin-top:0;'>Ask anything about finance, stocks, or investing</p>
         """, unsafe_allow_html=True)
 
@@ -55,13 +56,16 @@ def render_chat_tab():
                                 "user": q_sample,
                                 "assistant": None
                     })
+                    st.session_state.current_index = len(st.session_state.memory) - 1
                     st.session_state.pending_query = q_sample
                     st.rerun()
 
     # -------------------------------
     # Chat history
     # -------------------------------
-    for m in st.session_state.memory:
+    display_memory = st.session_state.memory[-20:]  # only UI limit
+
+    for m in display_memory:
 
         # User message
         with st.chat_message("user"):
@@ -89,7 +93,13 @@ def render_chat_tab():
                     "memory": st.session_state.memory
             })
 
+
+
+
+
+            # need to find the output
             answer = result.get("answer", "No response")
+            data = result.get("data")
             answer = answer.replace(". ", ".\n\n")
             answer = re.sub(r'(\d+)\.\s*\n\s*', r'\1. ', answer)
             answer = re.sub(r'(Suggested Options:\s*)(\d+)\.\s*\n', r'\1\2. ', answer)
@@ -101,18 +111,45 @@ def render_chat_tab():
                 full_text += char
                 placeholder.markdown(full_text)
                 time.sleep(0.005)
+            # -------------------------------
+            # 🔥 SHOW STRUCTURED DATA (UI)
+            # -------------------------------
+            if data:
+                
+                st.markdown("### 💸 Investment Plan")
+                # Fund
+                if data.get("fund"):
+                    st.write(f"**Fund:** {data['fund']}")
 
-            if result.get("agent"):
-                st.caption(f"🧠 {result['agent']}")
+                # SIP
+                if data.get("sip"):
+                    st.metric("Monthly SIP", f"₹{data['sip']}")
 
-        st.session_state.memory.append({
-            "user": q,
-            "assistant": answer,
-            "agent": result.get("agent", "Unknown")
-        })
+                # Allocation
+                if data.get("allocation"):
+                    st.markdown("### 📊 Allocation")
 
-        st.session_state.memory = st.session_state.memory[-5:]
+                    import matplotlib.pyplot as plt
+
+                    labels = list(data["allocation"].keys())
+                    sizes = list(data["allocation"].values())
+
+                    fig, ax = plt.subplots()
+                    ax.pie(sizes, labels=labels, autopct='%1.0f%%')
+
+                    st.pyplot(fig)
+
+        if result.get("agent"):
+            st.caption(f"🧠 {result['agent']}")
+
+        idx = st.session_state.get("current_index")
+
+        if isinstance(idx, int) and 0 <= idx < len(st.session_state.memory):
+            st.session_state.memory[idx]["assistant"] = answer
+            st.session_state.memory[idx]["agent"] = result.get("agent", "Unknown")
+
         st.session_state.pending_query = None
+        st.session_state.current_index = None
 
     # -------------------------------
     # Chat input (NO extra spacing)
@@ -127,5 +164,16 @@ def render_chat_tab():
             "assistant": None
         })
 
+        st.session_state.current_index = len(st.session_state.memory) - 1
         st.session_state.pending_query = user_input
         st.rerun()
+
+    st.markdown(
+    """
+    <script>
+        var body = window.parent.document.querySelector(".main");
+        body.scrollTo({top: body.scrollHeight, behavior: 'smooth'});
+    </script>
+    """,
+    unsafe_allow_html=True
+)

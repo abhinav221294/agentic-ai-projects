@@ -7,7 +7,7 @@ from agents.risk_agent import risk_agent
 from agents.advisor_agent import advisor_agent
 from agents.market_agent import market_agent
 from agents.news_agent import news_agent
-
+vars
 def __build_workflow():
     """
     Builds and compiles a LangGraph workflow for a multi-agent system.
@@ -58,7 +58,7 @@ def __build_workflow():
     # Step 4: Define valid categories
     # ---------------------------------------------------
     # This acts as a safeguard to avoid invalid routing
-    __VALID_CATEGORIES = {"rag", "market", "risk", "advisor","news"}
+    VALID_CATEGORIES = {"rag", "market", "risk", "advisor","news","none"}
 
     # ---------------------------------------------------
     # Step 5: Routing decision function
@@ -68,10 +68,14 @@ def __build_workflow():
 
     def __route_decision(state: AgentState):
         # Get category from state (default to "rag" if missing)
-        category = state.get("category", "rag")
+        category = state.get("category", "none")
 
-        # Return category only if valid, else fallback to "rag"
-        return category if category in __VALID_CATEGORIES else "rag"
+        # ✅ Handle "none" BEFORE routing
+        if category == "none":
+            state["answer"] = "I can only help with finance-related questions."
+            return "end"   # 👈 stops execution
+
+        return category if category in VALID_CATEGORIES else "none"
     
     # ---------------------------------------------------
     # Step 6: Add conditional edges
@@ -90,7 +94,8 @@ def __build_workflow():
             "market": "market_agent",
             "risk": "risk_agent",
             "advisor": "advisor_agent",
-            "news": "news_agent"
+            "news": "news_agent",
+            "end" : END
         }
     )
 

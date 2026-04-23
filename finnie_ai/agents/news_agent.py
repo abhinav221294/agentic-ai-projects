@@ -2,6 +2,8 @@ from utils.state import AgentState
 from tavily import TavilyClient
 import os
 from dotenv import load_dotenv
+from tools.summarize_text import summarize_article
+
 
 load_dotenv()
 client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
@@ -25,8 +27,13 @@ def news_agent(state:AgentState)-> AgentState:
         for i, article in enumerate(articles, 1):
             title = article.get("title", "No title")
             url = article.get("url", "")
+            content = article.get("content", "") or article.get("snippet", "")
+            summary = summarize_article(content[:2000])
 
-            response += f"{i}. {title}\n{url}\n\n"
+            response += f"{i}. {title}\n\n"
+            response += f"{summary}\n\n"
+            response += f"For detail:\n{url}\n\n"
+
         
         state["answer"] = response
         state["agent"] = "news_agent"

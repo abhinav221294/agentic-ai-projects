@@ -83,6 +83,27 @@ STOCK_MAP = {
 }
 
 
+#def normalize_stock(symbol: str) -> str:
+#    symbol = symbol.upper().strip()
+#    return STOCK_MAP.get(symbol, symbol)
+
+
 def normalize_stock(symbol: str) -> str:
     symbol = symbol.upper().strip()
-    return STOCK_MAP.get(symbol, symbol)
+
+    # Remove noise words
+    for word in ["SHARE", "STOCK", "LTD", "LIMITED"]:
+        symbol = symbol.replace(word, "")
+
+    symbol = symbol.strip()
+
+    # ✅ Exact match
+    if symbol in STOCK_MAP:
+        return STOCK_MAP[symbol]
+
+    # ✅ Partial match
+    for key in STOCK_MAP:
+        if key in symbol:
+            return STOCK_MAP[key]
+
+    return symbol

@@ -58,7 +58,6 @@ def get_alpha_vantage_price(symbol: str):
     except:
         return None
 
-
 def market_agent(state: AgentState) -> AgentState:
 
     # -------------------------
