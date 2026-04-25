@@ -3,6 +3,8 @@ from ui.tab1_chat import render_chat_tab
 from ui.tab2_portfolio import render_portfolio_tab
 from ui.tab3_market import render_market_tab
 from ui.tab4_news import render_news_tab
+import os
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
 st.set_page_config(page_title="Finnie AI", layout="wide")
 

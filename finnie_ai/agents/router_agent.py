@@ -2,6 +2,7 @@ from utils.state import AgentState
 from utils.llm import get_llm
 from utils.prompts import ROUTER_PROMPT
 import re
+from utils.stock_mapper import normalize_stock
 
 VALID_CATEGORIES = {"market", "risk", "advisor", "news", "rag", "none"}
 
@@ -11,6 +12,32 @@ def router_agent(state: AgentState) -> AgentState:
     query = state["query"]
     query_lower = query.lower()
     memory = state.get("memory", [])
+    symbol = normalize_stock(query)
+
+    
+
+    # FOLLOW-UP (HIGHEST PRIORITY)
+    FOLLOW_UP_PHRASES = [
+    "what do you think",
+    "based on",
+    "is it good",
+    "should i",
+    "what about",
+    "how about",
+    "tell me more"
+    ]
+
+    is_follow_up = (
+        len(memory) > 0 and
+        (
+        any(p in query_lower for p in FOLLOW_UP_PHRASES)
+        or len(query_lower.split()) <= 7   # short query heuristic
+        ))
+        
+    # Only treat as follow-up if it's vague AND short
+    is_vague = not any(w in query_lower for w in [
+        "price", "stock", "share", "risk", "invest", "buy", "sell"
+    ]) and symbol is None
 
     FINANCE_KEYWORDS = [
     "stock", "market", "price", "nifty", "sensex",
@@ -19,16 +46,20 @@ def router_agent(state: AgentState) -> AgentState:
     "risk", "volatility", "return", "dividend",
     "crypto", "trading"]
 
-    is_follow_up = len(memory) > 0 and any(
-    query_lower in m.get("user", "").lower()
-    for m in memory[-2:]
-    )
+    # FOLLOW-UP (only if no strong signal)
+    if is_follow_up:
+        state["category"] = "advisor"
+        return state
+
 
     # 🔹 Allow definition-type queries (handled later)
     is_definition = query_lower.startswith(("what is", "define", "explain"))
 
     # 🔴 HARD STOP (only if clearly non-finance AND not follow-up)
-    if not any(word in query_lower for word in FINANCE_KEYWORDS) and not is_follow_up and not is_definition:
+
+
+    
+    if not any(word in query_lower for word in FINANCE_KEYWORDS) and not is_follow_up and not symbol:
         print("[Router] Non-finance query detected → stopping")
         state["category"] = "none"
         return state
@@ -37,26 +68,63 @@ def router_agent(state: AgentState) -> AgentState:
     # 🔹 RULE-BASED ROUTING (FAST PATH)
     # ---------------------------------------------------
 
-    # Market
-    if any(word in query_lower for word in ["price", "stock", "nifty", "sensex", "share"]):
+       # -------------------------
+    # MARKET
+    # -------------------------
+
+    PRICE_KEYWORDS = ["price", "quote", "current", "latest", "now"]
+
+    #if any(word in query_lower for word in ["price", "stock", "nifty", "sensex", "share"]):
+    if symbol and (
+    any(word in query_lower for word in PRICE_KEYWORDS)
+    or len(query_lower.split()) <= 3
+    ):
         state["category"] = "market"
         return state
-
-    # Risk
-    if any(word in query_lower for word in ["risk", "volatility", "loss", "danger", "safe"]):
-        state["category"] = "risk"
+    
+    # -------------------------
+    # RAG (definitions FIRST)
+    # -------------------------
+    if query_lower.startswith(("what is", "define", "explain")):
+        if any(word in query_lower for word in FINANCE_KEYWORDS):
+            state["category"] = "rag"
+        else:
+            state["category"] = "none"
         return state
-
-    # Advisor
-    if any(word in query_lower for word in ["invest", "investment", "buy", "sell", "portfolio", "should i"]):
+    
+    # -------------------------
+    # STOCK + RISK → ADVISOR (orchestration)
+    # -------------------------
+    if symbol and any(word in query_lower for word in ["risk", "risky"]):
         state["category"] = "advisor"
         return state
+    
+    # -------------------------
+    # RISK (only pure risk queries)
+    # -------------------------
+    # -------------------------
+    # RISK (higher priority)
+    # -------------------------
+    if any(word in query_lower for word in ["risk", "risky", "volatility", "loss", "danger", "safe"]):
 
-    # News
-    if any(word in query_lower for word in ["news", "latest", "update", "headline"]):
-        state["category"] = "news"
+        # ✅ If explicitly asking "what should I do" → advisor
+        if any(word in query_lower for word in [
+        "suggest", "plan", "allocate", "where", "portfolio"
+        ]):
+            pass  # advisor will handle
+
+        else:
+            state["category"] = "risk"
+            return state
+
+    if any(word in query_lower for word in [
+        "invest", "investment", "buy", "sell", "portfolio",
+        "should i", "goal", "lump", "sip"
+    ]):
+        state["category"] = "advisor"
         return state
-
+    
+   
     # RAG (definitions)
     if query_lower.startswith(("what is", "define", "explain")):
         if any(word in query_lower for word in FINANCE_KEYWORDS):

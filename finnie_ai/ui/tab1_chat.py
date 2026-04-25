@@ -14,7 +14,6 @@ def render_chat_tab():
     if "pending_query" not in st.session_state:
         st.session_state.pending_query = None
         st.session_state.current_index = None
-
     # -------------------------------
     # Header
     # -------------------------------
@@ -59,98 +58,78 @@ def render_chat_tab():
                     st.session_state.current_index = len(st.session_state.memory) - 1
                     st.session_state.pending_query = q_sample
                     st.rerun()
-
-    # -------------------------------
-    # Chat history
-    # -------------------------------
-    display_memory = st.session_state.memory[-20:]  # only UI limit
-
-    for m in display_memory:
-
-        # User message
-        with st.chat_message("user"):
-            st.write(m["user"])
-
-        # Assistant message (ONLY if exists)
-        if m["assistant"] is not None:
-            with st.chat_message("assistant"):
-                st.write(m["assistant"])
-
-                if m.get("agent"):
-                    st.caption(f"🧠 {m['agent']}")
-                
     # -------------------------------
     # New query
     # -------------------------------
     if st.session_state.pending_query:
 
-        q = st.session_state.pending_query
-
-        with st.chat_message("assistant"):
+            q = st.session_state.pending_query
             with st.spinner("🤖 Thinking..."):
+                memory_snapshot = st.session_state.memory.copy()
+
                 result = run_workflow({
                     "query": q,
-                    "memory": st.session_state.memory
-            })
+                    "memory": memory_snapshot
+                })
 
+            answer = result.get("answer") #or "Something went wrong."
+            if not answer or not answer.strip():
+                    answer = """I had trouble generating a response.
 
+Here’s a simple starting point:
 
+Recommendation  
+70% Balanced Advantage Fund  
+30% Short-term Debt Fund  
 
+This is a safe, low-risk allocation.
 
-            # need to find the output
-            answer = result.get("answer", "No response")
+You can refine this by sharing your goal and investment type."""
+                    
+            agent = result.get("agent") or "advisor_agent"
             data = result.get("data")
-            answer = answer.replace(". ", ".\n\n")
-            answer = re.sub(r'(\d+)\.\s*\n\s*', r'\1. ', answer)
-            answer = re.sub(r'(Suggested Options:\s*)(\d+)\.\s*\n', r'\1\2. ', answer)
 
-            placeholder = st.empty()
-            full_text = ""
+            # update memory
+            idx = st.session_state.get("current_index")
 
-            for char in answer:
-                full_text += char
-                placeholder.markdown(full_text)
-                time.sleep(0.005)
-            # -------------------------------
-            # 🔥 SHOW STRUCTURED DATA (UI)
-            # -------------------------------
-            if data:
-                
-                st.markdown("### 💸 Investment Plan")
-                # Fund
-                if data.get("fund"):
-                    st.write(f"**Fund:** {data['fund']}")
+            if isinstance(idx, int) and 0 <= idx < len(st.session_state.memory):
+                st.session_state.memory[idx]["assistant"] = answer
+                st.session_state.memory[idx]["agent"] = agent
+                st.session_state.memory[idx]["animated"] = False  # 👈 add
 
-                # SIP
-                if data.get("sip"):
-                    st.metric("Monthly SIP", f"₹{data['sip']}")
+            st.session_state.pending_query = None
+            st.session_state.current_index = None
+            st.rerun()
+    # -------------------------------
+    # Chat history
+    # -------------------------------
+    display_memory = st.session_state.memory[-20:]  # only UI limit
 
-                # Allocation
-                if data.get("allocation"):
-                    st.markdown("### 📊 Allocation")
+    for i, m in enumerate(display_memory):
 
-                    import matplotlib.pyplot as plt
+        # User
+        with st.chat_message("user"):
+            st.write(m["user"])
 
-                    labels = list(data["allocation"].keys())
-                    sizes = list(data["allocation"].values())
+        # Assistant
+        if m["assistant"] is not None:
+            with st.chat_message("assistant"):
 
-                    fig, ax = plt.subplots()
-                    ax.pie(sizes, labels=labels, autopct='%1.0f%%')
+                # 🔥 ONLY animate last message
+                if not m.get("animated", False):
+                    placeholder = st.empty()
+                    full_text = ""
 
-                    st.pyplot(fig)
+                    for char in m["assistant"]:
+                        full_text += char
+                        placeholder.markdown(full_text)
+                        time.sleep(0.002)
+                    m["animated"] = True   # 👈 ADD THIS LINE
+                else:
+                    st.write(m["assistant"])
 
-        if result.get("agent"):
-            st.caption(f"🧠 {result['agent']}")
-
-        idx = st.session_state.get("current_index")
-
-        if isinstance(idx, int) and 0 <= idx < len(st.session_state.memory):
-            st.session_state.memory[idx]["assistant"] = answer
-            st.session_state.memory[idx]["agent"] = result.get("agent", "Unknown")
-
-        st.session_state.pending_query = None
-        st.session_state.current_index = None
-
+                if m.get("agent"):
+                    st.caption(f"🧠 {m['agent']}")
     # -------------------------------
     # Chat input (NO extra spacing)
     # -------------------------------
@@ -168,6 +147,8 @@ def render_chat_tab():
         st.session_state.pending_query = user_input
         st.rerun()
 
+    
+                
     st.markdown(
     """
     <script>

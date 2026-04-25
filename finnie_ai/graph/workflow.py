@@ -7,7 +7,74 @@ from agents.risk_agent import risk_agent
 from agents.advisor_agent import advisor_agent
 from agents.market_agent import market_agent
 from agents.news_agent import news_agent
-vars
+from utils.llm import get_llm
+
+def fallback_agent(state: AgentState) -> AgentState:
+    query = state.get("query", "").lower()
+
+    llm = get_llm(temperature=0.2)
+
+    response = llm.invoke(f"""User asked: "{query}"
+
+You're a finance-focused assistant having a casual chat. The user asked about something outside your scope.
+
+Respond in 2–3 lines:
+1. Name the actual topic from the query, then make a brief neutral observation about it
+2. Say you usually stick to finance
+3. Name what you cover in passing — like mentioning it, not offering it
+
+
+                          
+RULES:
+- Use the actual topic the user asked about — do not substitute or paraphrase it
+- No explaining the off-topic subject
+- No questions
+- No filler affirmations or compliments ("great way to...", "Interesting!", "Sounds fun!")
+- No availability offers ("happy to", "feel free", "let me know", "I'm here for")
+- Don't start with "I"
+- Last line names your scope — it doesn't invite or offer
+               
+Use variation at starting:
+"Topic, huh?"
+"Oh, Topic?"
+"Ah, Topic"
+                          
+Replace:
+“well-loved” ❌
+“fascinating” ❌
+“intriguing” ❌
+
+With:
+“popular” ✅
+                          
+TONE: Like a person casually saying "not really my thing, I'm more into X"
+
+TARGET OUTPUT (match this style, don't copy it):
+"Cricket? That's a popular sport. I usually stick to finance though — things like investing and markets."
+
+BANNED WORDS/PHRASES:
+- "sounds interesting / intriguing"
+- "my focus is on"
+- "I specialize in"
+- "happy to" / "feel free" / "let me know"
+- Any compliment about the off-topic subject
+CRITICAL STYLE:
+- Keep sentences simple and spoken (not written/formal)
+- Avoid structured or formal phrasing
+- Should sound like casual speech, not a statement
+
+EXAMPLE:
+Topic? That's a popular sport.  
+I usually stick to finance though—stuff like stocks and budgeting.""")
+    
+    if not response or not response.content:
+        state["answer"] = "I usually focus on finance—things like investing and markets."
+    else:
+        state["answer"] = response.content.strip()
+    state["agent"] = "fallback_agent"
+    return state
+
+
 def __build_workflow():
     """
     Builds and compiles a LangGraph workflow for a multi-agent system.
@@ -48,6 +115,7 @@ def __build_workflow():
     workflow.add_node("risk_agent", risk_agent)         # risk-related queries
     workflow.add_node("advisor_agent", advisor_agent)   # investment advice
     workflow.add_node("news_agent", news_agent) 
+    workflow.add_node("fallback_agent", fallback_agent)
     # ---------------------------------------------------
     # Step 3: Define entry point
     # ---------------------------------------------------
@@ -67,15 +135,22 @@ def __build_workflow():
     # and determines which node to execute next
 
     def __route_decision(state: AgentState):
-        # Get category from state (default to "rag" if missing)
         category = state.get("category", "none")
 
-        # ✅ Handle "none" BEFORE routing
+        # ✅ Ensure string only
+        if not isinstance(category, str):
+            print("[Routing Error] Invalid category:", category)
+            return "none"
+
         if category == "none":
-            state["answer"] = "I can only help with finance-related questions."
-            return "end"   # 👈 stops execution
+            return "none"
 
         return category if category in VALID_CATEGORIES else "none"
+
+        ## ✅ Handle "none" BEFORE routing
+        #if category == "none":
+        #    state["answer"] = "I can only help with finance-related questions."
+        #    return "end"   # 👈 stops execution
     
     # ---------------------------------------------------
     # Step 6: Add conditional edges
@@ -95,7 +170,7 @@ def __build_workflow():
             "risk": "risk_agent",
             "advisor": "advisor_agent",
             "news": "news_agent",
-            "end" : END
+            "none": "fallback_agent"
         }
     )
 
@@ -109,6 +184,7 @@ def __build_workflow():
     workflow.add_edge("risk_agent", END)
     workflow.add_edge("advisor_agent", END)
     workflow.add_edge("news_agent", END)
+    workflow.add_edge("fallback_agent", END)
 
     # ---------------------------------------------------
     # Step 8: Compile workflow
@@ -120,4 +196,8 @@ def __build_workflow():
 app = __build_workflow()
 
 def run_workflow(state: dict):
-    return app.invoke(state)
+    #return app.invoke(state)
+    result = app.invoke(state)
+    if not result:
+        return {"answer": "Something went wrong.", "agent": "system"}
+    return result

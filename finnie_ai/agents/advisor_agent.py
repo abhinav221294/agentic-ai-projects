@@ -1,192 +1,276 @@
 from utils.state import AgentState
 from utils.llm import get_llm
 from utils.prompts import ADVISOR_PROMPT
-from agents.market_agent import get_finnhub_price
 from tools.rag_pipeline import RAGPipeline
-import json
-from utils.stock_mapper import STOCK_MAP,normalize_stock
+from utils.stock_mapper import normalize_stock
 from utils.price_utils import get_price
+from agents.risk_agent import risk_agent
+from agents.news_agent import news_agent
+
+import json
+import re
 
 rag = RAGPipeline()
 
+
 def advisor_agent(state: AgentState) -> AgentState:
 
-    raw_query = state["query"]
-    query = raw_query.lower()
+    # -------------------------
+    # 🔹 Query cleaning
+    # -------------------------
+    raw_query = state["query"].replace("'", "").replace('"', "").strip()
+    query = re.sub(r"[^\w\s]", " ", raw_query.lower()).strip()
 
     memory = state.get("memory", [])
-    #context_text = " ".join([m.get("user", "") for m in memory[-3:]]).lower()
-    full_query = query
+
 
     # -------------------------
-    # Market info
+    # 🔹 Last answer
     # -------------------------
-
-    market_info = ""
-
-    if any(word in query for word in ["stock", "price", "buy", "sell"]):
-            symbol = normalize_stock(raw_query)
-            price = get_price(symbol)
-
-            if price:
-                market_info = f"{symbol} current price is {price}"
-
-    retrieval_prompt = f"""
-Decide whether this query needs knowledge retrieval.
-
-Return ONLY:
-YES or NO
-
-Rules:
-- YES → if query is asking for definition, concept, explanation
-- NO → if query is asking for advice, recommendation, decision
-
-Query:
-{full_query}
-"""
-    llm = get_llm()
-    retrieval_decision = llm.invoke(retrieval_prompt).content.strip().upper()
-
-    if "YES" in retrieval_decision:
-        rag_results = rag.retrieve(query=query) or []
-    else:
-        rag_results = []
-
-    context_docs = "\n\n".join(
-        r.get("content", "") for r in rag_results[:2]
+    last_answer = next(
+        (m["assistant"] for m in reversed(memory) if m.get("assistant")),
+        ""
     )
 
-    if context_docs.strip() and retrieval_decision == "YES":
-        knowledge_section = context_docs
+    # -------------------------
+    # 🔹 Combined query
+    # -------------------------
+    user_inputs = [m.get("user", "") for m in memory if m.get("user")]
+    user_inputs = [u for u in user_inputs if u.lower().strip() != raw_query.lower().strip()]
+
+    combined_query = " ".join(user_inputs + [raw_query])
+    combined_query = re.sub(r"[^\w\s]", " ", combined_query).strip().lower()
+    
+    symbol = normalize_stock(raw_query)
+
+    # ✅ Only allow symbol if explicitly stock-related
+    is_stock_query = any(w in query for w in ["stock", "share", "price"])
+
+    if not is_stock_query:
+        symbol = None
+
+    price_keywords = ["price", "quote", "current", "latest"]
+    needs_risk = any(w in combined_query for w in ["risk", "safe", "danger", "volatile", "stable"])    
+    needs_market = symbol is not None and any(w in combined_query for w in price_keywords)
+    needs_news = any(w in combined_query for w in ["news", "latest"])
+
+    is_advice_query = any(w in combined_query for w in [
+        "should i invest",
+        "where should i invest",
+        "investment plan",
+        "portfolio",
+        "suggest",
+        "allocate"
+        ])
+    
+    is_risk_question = any(w in combined_query for w in ["risk", "risky"]) and "?" in raw_query
+
+    if symbol and is_risk_question:
+        # Let LLM handle using risk + market context
+        is_advice_query = False
+
+    if not (needs_risk or needs_market or needs_news):
+            print("👉 Advisor handling directly (no agents)")
+    
+    risk_analysis = ""
+    market_info = ""
+    news_context = ""
+
+    if needs_risk:
+        
+        try:
+            risk_state = {
+            "query": combined_query,
+            "memory": memory
+            }
+            risk_result = risk_agent(risk_state)
+            risk_analysis = risk_result.get("answer", "")
+        except Exception as e:
+            print("⚠️ Risk agent failed:", e)
+            risk_analysis = ""
+
+
+    if needs_market:
+        try:
+        
+            price = None
+            
+            if symbol:
+                if symbol:
+                    price = get_price(symbol)
+                else:
+                    price = None
+            else:
+                print("⚠️ Could not detect stock symbol")
+            if price:
+                clean_price = round(price, 2)
+                stock_name = symbol.replace(".NS", "")
+                market_info = f"{stock_name} is currently trading around ₹{clean_price}"
+
+        except Exception as e:
+                print("⚠️ Market fetch failed:", e)
+                market_info = ""
+
+    if needs_news or (needs_market and len(combined_query.split()) > 3):  # market queries also benefit from news
+        try:
+            news_state = {
+            "query": combined_query
+            }
+            news_result = news_agent(news_state)
+            news_context = news_result.get("answer", "")
+            news_context = news_context[:1000] if news_context else ""
+        except Exception as e:
+            print("⚠️ News agent failed:", e)
+            news_context = ""
+
+
+    # -------------------------
+    # 🔹 RAG retrieval (rule-based)
+    # -------------------------
+    is_definition = any(q in combined_query for q in [
+        "what is", "define", "explain", "how", "difference", "meaning"
+    ])
+
+    is_advice = any(q in combined_query for q in [
+        "invest", "should i", "buy", "portfolio"
+    ])
+
+    rag_results = rag.retrieve(query=combined_query) if is_definition and not is_advice else []
+
+    context_docs = "\n\n".join(r.get("content", "") for r in rag_results[:2])
+    knowledge_section = context_docs if context_docs.strip() else "None"
+
+    # -------------------------
+    # 🔹 Profile detection
+    # -------------------------
+    has_risk = any(w in combined_query for w in ["low", "medium", "high", "safe", "risk"])
+    has_goal = any(w in combined_query for w in ["growth", "income", "safety", "returns"])
+    has_type = any(w in combined_query for w in ["sip", "lump", "lumpsum", "one"])
+
+    is_profile_complete = has_risk and has_goal and has_type
+    if is_advice_query:
+        clarification_needed = not is_profile_complete
     else:
-        knowledge_section = "None"
+        clarification_needed = False
+
+
+    if is_advice_query and not is_profile_complete:
+
+        missing = []
+
+        if not has_risk:
+            missing.append("Risk level (low / medium / high)")
+        if not has_goal:
+            missing.append("Goal (growth / income / safety)")
+        if not has_type:
+            missing.append("Investment type (SIP or lump sum)")
+
+        # ✅ If user already gave risk → still give starter recommendation
+        if has_risk:
+            allocation = "70% Balanced Advantage Fund + 30% Short-term Debt Fund"
+
+            state["answer"] = f"""Based on your preference for low risk:
+
+Recommendation  
+{allocation}
+
+This gives stability with limited volatility.
+
+To refine further, I need:
+""" + "\n".join(f"{i+1}. {m}" for i, m in enumerate(missing))
+
+        else:
+            state["answer"] = "To give you the best investment recommendation, I need:\n" + \
+                         "\n".join(f"{i+1}. {m}" for i, m in enumerate(missing))
+
+        state["agent"] = "advisor_agent"
+        state["confidence"] = "MEDIUM"
+        state["clarification_needed"] = True
+
+        return state
+    
+    # -------------------------
+    # 🔹 Mode detection
+    # -------------------------
+    if any(s in combined_query for s in ["detail", "explain more", "clarify"]):
+        mode = "DETAIL"
+    else:
+        mode = "AUTO"
 
     # -------------------------
-    # Conversation
+    # 🔹 Strategy (only if needed)
     # -------------------------
-    conversation = ""
-    for m in memory[-3:]:
-        conversation += f"\nUser: {m.get('user', '')}\nAssistant: {m.get('assistant', '')}\n"
+    allocation = ""
+    risk = strategy = goal = horizon = ""
 
-    detail_signals = [
-    "in detail",
-    "more details",
-    "explain more",
-    "not clear",
-    "don't understand",
-    "clarify"
-    ]
+    llm = get_llm()
 
-    # -------------------------
-    # 🔥 STEP 1: Strategy (JSON)
-    # -------------------------
-    strategy_prompt = f"""You are an expert financial analyst.
+    if mode != "DETAIL" and is_profile_complete:
+        try:
+            strategy_prompt = f"""
+Extract structured investment strategy.
 
-Your job is NOT just to classify.
-
-You MUST:
-- deeply understand the user context
-- generate a personalized investment approach
-
-Extract:
-- risk tolerance
-- strategy
-- user goal
-- time horizon
-- recommended portfolio allocation (in %)
-- reasoning
-
-Return STRICT JSON:
+Return JSON:
 {{
   "risk": "...",
   "strategy": "...",
   "user_goal": "...",
   "time_horizon": "...",
-  "allocation": "e.g. 60% balanced fund + 40% index fund",
-  "reason": "..."
+  "allocation": "..."
 }}
 
-IMPORTANT:
-- The allocation MUST be different for different users
-- Do NOT give generic outputs
-
 Query:
-{full_query}
+{combined_query}
 """
+            content = llm.invoke(strategy_prompt).content.strip()
 
-    try:
+            # Extract JSON safely
+            match = re.search(r"\{.*\}", content, re.DOTALL)
 
-        simple_signals = [
-    "where should i invest",
-    "should i invest",
-    "what should i do"
-        ]
+            if match:
+                try:
+                    parsed = json.loads(match.group())
+                except:
+                    parsed = {}
+            else:
+                    parsed = {}
 
-
-        detail_signals = [
-        "in detail",
-        "more details",
-        "explain more",
-        "not clear",
-        "don't understand",
-        "clarify"
-        ]
-
-        if any(s in query for s in detail_signals):
-            mode = "DETAIL"
-        elif any(s in query for s in simple_signals):
-            mode = "SIMPLE"
-        else:
-            mode = "AUTO"
-
-      
-        if mode != "DETAIL":
-            strategy_response = llm.invoke(strategy_prompt)
-
-            parsed = json.loads(
-                strategy_response.content.strip().replace("```json", "").replace("```", "")
-            )
-
-            strategy = parsed.get("strategy", "unknown")
-            risk = parsed.get("risk", "unknown")
-            #reason = parsed.get("reason", "")
+            risk = parsed.get("risk", "")
+            strategy = parsed.get("strategy", "")
             goal = parsed.get("user_goal", "")
             horizon = parsed.get("time_horizon", "")
             allocation = parsed.get("allocation", "")
-        else:
-            # 🔥 DO NOT recompute for follow-ups
-            strategy = "same as previous"
-            risk = "same as previous"
-            goal = ""
-            horizon = ""
-            allocation = ""
-        
-        if mode != "DETAIL":
-            if not allocation or allocation.strip() == "":
-                allocation = "60% Nifty 50 index fund + 40% balanced advantage fund"
+            if not allocation:
+                if "low" in combined_query:
+                    allocation = "70% Balanced Advantage Fund + 30% Short-term Debt Fund"
 
-    except Exception:
-        strategy = "balanced"
-        risk = "medium"
-        #reason = ""
-    
-    profile_section = f"""- Risk: {risk}
-- Strategy: {strategy}"""
+        except Exception as e:
+            print("⚠️ Strategy parse failed:", e)
 
-    if goal:
-        profile_section += f"\n- Goal: {goal}"
-    if horizon:
-        profile_section += f"\n- Time Horizon: {horizon}"
-
-    last_answer = ""
-
-    for m in reversed(memory):
-        if m.get("assistant"):
-            last_answer = m["assistant"]
-            break
-    allocation_section = allocation if mode != "DETAIL" else "Use previous recommendation"
     # -------------------------
-    # 🔥 STEP 2: Generate answer
+    # 🔹 Fallback allocation
+    # -------------------------
+    if is_profile_complete and not allocation.strip():
+        if "low" in combined_query:
+            allocation = "70% Balanced Advantage Fund + 30% Short-term Debt Fund"
+        elif "high" in combined_query:
+            allocation = "80% Nifty 50 Index Fund + 20% Balanced Advantage Fund"
+        else:
+            allocation = "60% Nifty 50 Index Fund + 40% Balanced Advantage Fund"
+
+    if not is_profile_complete:
+        allocation = ""
+
+    # -------------------------
+    # 🔹 Conversation
+    # -------------------------
+    conversation = "\n".join(
+        f"User: {m.get('user','')}\nAssistant: {m.get('assistant','')}"
+        for m in memory[-3:]
+    ) or "None"
+
+    # -------------------------
+    # 🔹 Final Prompt
     # -------------------------
     final_prompt = f"""{ADVISOR_PROMPT}
 
@@ -194,93 +278,97 @@ Query:
 {mode}
 
 ### USER QUERY
-{full_query}
+{combined_query}
+
+### CLARIFICATION NEEDED
+{clarification_needed}
 
 ### PREVIOUS RECOMMENDATION
-{last_answer if last_answer else "None"}
+{last_answer or "None"}
 
-### CONTEXT (Recent Conversation)
-{conversation if conversation else "None"}
+### CONTEXT
+{conversation}
 
-- Risk: {risk}
-- Strategy: {strategy}
-- Goal: {goal}
-- Time Horizon: {horizon}
+### RISK ANALYSIS
+{risk_analysis or "None"}
 
-### USER PROFILE (Inferred)
-{profile_section}
+### MARKET INFO
+{market_info or "None"}
 
-### PORTFOLIO / MARKET CONTEXT
-{market_info if market_info else "None"}
+### PORTFOLIO ALLOCATION
+{allocation or "None"}
 
-### PORTFOLIO ALLOCATION (MANDATORY - MUST FOLLOW)
-{allocation_section}
+### NEWS CONTEXT
+{news_context or "None"}
 
-### RELEVANT KNOWLEDGE
+### KNOWLEDGE
 {knowledge_section}
 
-If RESPONSE MODE != DETAIL and allocation is provided:
-- You MUST use it
+CONTEXT USAGE RULE:
 
-If RESPONSE MODE = DETAIL:
-- Ignore PORTFOLIO ALLOCATION
-- Use PREVIOUS RECOMMENDATION instead
+If RISK ANALYSIS is provided:
+- You MUST consider it before answering
 
-DETAIL MODE (CRITICAL):
+If MARKET INFO is provided:
+- Use it to ground your advice
 
-If RESPONSE MODE = DETAIL:
-- You MUST use the structure below
-- You MUST expand the answer
-- You MUST NOT give a short answer
-
-
-Required Structure:
-
-Recommendation
--Provide allocation in %.
-
-If user has provided budget:
-- also include ₹ split
-Else:
-- DO NOT include ₹ values
-
-Breakdown
-- Explain each investment and its role
-
-Why this works
-- Explain how allocation balances risk and return
-
-Next Steps
-- Clear actionable steps (platform + SIP split)
-
-If this structure is not followed, the answer is INVALID.
-
-- Avoid repeating the same sentence
-- Add clarity, not length
+If NEWS CONTEXT is provided:
+- Consider recent sentiment before recommending
 """
 
 
+
+    # -------------------------
+    # 🔹 LLM Response
+    # -------------------------
+    answer = ""
     try:
         response = llm.invoke(final_prompt)
-        answer = response.content
-        
-        if context_docs != "No relevant knowledge found." and market_info:
-            confidence = "HIGH"
-        elif context_docs != "No relevant knowledge found.":
-            confidence = "MEDIUM"
-        else:
-            confidence = "LOW"
+        answer = getattr(response, "content", "") or ""
 
-    except Exception:
-        answer = f"A {strategy} strategy is recommended based on your query."
+        confidence = "LOW"
+
+        if risk_analysis or market_info or news_context:
+                confidence = "MEDIUM"
+
+        if context_docs and (market_info or news_context):
+                confidence = "HIGH"
+
+    except Exception as e:
+        print("❌ FINAL ERROR:", e)
+
+        if not is_profile_complete:
+            answer = """To give you the best investment recommendation, I need:
+
+1. Risk level (low / medium / high)
+2. Goal (growth / income / safety)
+3. Investment type (SIP or lump sum)"""
+        else:
+            answer = f"""Recommendation
+{allocation}
+
+Breakdown
+Balanced allocation based on your profile.
+
+Why this works
+Balances risk and income.
+
+Next Steps
+Invest and review periodically."""
+
         confidence = "LOW"
 
     # -------------------------
-    # Final state
+    # 🔹 Final state
     # -------------------------
-    state["answer"] = answer
-    state["agent"] = "advisor_agent"
-    state["confidence"] = confidence
-    state["clarification_needed"] = False
+
+
+
+    state.update({
+        "answer": answer,
+        "agent": "advisor_agent",
+        "confidence": confidence,
+        "clarification_needed": clarification_needed
+    })
 
     return state
