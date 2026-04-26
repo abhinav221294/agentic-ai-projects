@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Dict
+from typing import TypedDict, Optional, Dict, List
 
 class AgentState(TypedDict, total=False):
     query: str
@@ -9,4 +9,5 @@ class AgentState(TypedDict, total=False):
     confidence: str
     memory: List[Dict]  
     clarification_needed: bool
-    next_question: str             
+    next_question: str
+    profile: Dict[str, Optional[str]]             

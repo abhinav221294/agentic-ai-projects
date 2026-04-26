@@ -3,7 +3,7 @@ from tavily import TavilyClient
 import os
 from dotenv import load_dotenv
 from tools.summarize_text import summarize_article
-
+from utils.stock_mapper import normalize_stock
 
 load_dotenv()
 client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
@@ -11,7 +11,8 @@ client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
 def news_agent(state:AgentState)-> AgentState:
     
     query = f"{state['query']} latest news"
-
+    symbol = normalize_stock(query)
+    
     try:
         results = client.search(
             query=query,
@@ -22,6 +23,18 @@ def news_agent(state:AgentState)-> AgentState:
 
         if not articles:
             raise Exception("No news found")
+        
+        company_keyword = None
+        if symbol:
+            company_keyword = symbol.split(".")[0].lower()
+        filtered_articles = []    
+        for article in articles:
+            text = (article.get("title", "") + article.get("content", "")).lower()
+            if company_keyword and company_keyword in text:
+                filtered_articles.append(article)
+            # fallback if nothing matched
+            articles = filtered_articles if filtered_articles else articles[:3]
+            
         response = "📰 Latest News:\n\n"
 
         for i, article in enumerate(articles, 1):

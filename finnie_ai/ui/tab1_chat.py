@@ -2,6 +2,7 @@ import streamlit as st
 from graph.workflow import run_workflow
 import time
 import re
+import copy
 
 def render_chat_tab():
 
@@ -63,43 +64,35 @@ def render_chat_tab():
     # -------------------------------
     if st.session_state.pending_query:
 
-            q = st.session_state.pending_query
-            with st.spinner("🤖 Thinking..."):
-                memory_snapshot = st.session_state.memory.copy()
+        q = st.session_state.pending_query  # always latest
 
-                result = run_workflow({
-                    "query": q,
-                    "memory": memory_snapshot
-                })
+        with st.spinner("🤖 Thinking..."):
+            memory_snapshot = copy.deepcopy(st.session_state.memory)
 
-            answer = result.get("answer") #or "Something went wrong."
-            if not answer or not answer.strip():
-                    answer = """I had trouble generating a response.
+            print("MEMORY SNAPSHOT SENT:", memory_snapshot)
 
-Here’s a simple starting point:
+            result = run_workflow({
+            "query": q,
+            "memory": memory_snapshot
+            })
 
-Recommendation  
-70% Balanced Advantage Fund  
-30% Short-term Debt Fund  
+        answer = result.get("answer")
 
-This is a safe, low-risk allocation.
+        if not answer or not answer.strip():
+            answer = result.get("error") or "Something went wrong. Please try again."
 
-You can refine this by sharing your goal and investment type."""
-                    
-            agent = result.get("agent") or "advisor_agent"
-            data = result.get("data")
+        agent = result.get("agent") or "advisor_agent"
 
-            # update memory
-            idx = st.session_state.get("current_index")
+        # ✅ ALWAYS update last message
+        st.session_state.memory[-1]["assistant"] = answer
+        st.session_state.memory[-1]["agent"] = agent
+        st.session_state.memory[-1]["animated"] = False
 
-            if isinstance(idx, int) and 0 <= idx < len(st.session_state.memory):
-                st.session_state.memory[idx]["assistant"] = answer
-                st.session_state.memory[idx]["agent"] = agent
-                st.session_state.memory[idx]["animated"] = False  # 👈 add
+        print("UPDATED MEMORY:", st.session_state.memory)
 
-            st.session_state.pending_query = None
-            st.session_state.current_index = None
-            st.rerun()
+        st.session_state.pending_query = None
+        st.rerun()
+        
     # -------------------------------
     # Chat history
     # -------------------------------
@@ -137,10 +130,10 @@ You can refine this by sharing your goal and investment type."""
 
     if user_input:
 
-        # 🔥 Immediately append to memory
+        # ALWAYS append fresh user input
         st.session_state.memory.append({
-            "user": user_input,
-            "assistant": None
+        "user": user_input,
+        "assistant": None   # ✅ IMPORTANT
         })
 
         st.session_state.current_index = len(st.session_state.memory) - 1

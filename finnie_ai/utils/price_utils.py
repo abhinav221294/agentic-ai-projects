@@ -7,7 +7,7 @@ def get_price(symbol):
     try:
         # ✅ Use yfinance for Indian stocks
         if symbol.endswith(".NS"):
-            data = yf.Ticker(symbol).history(period="1d")
+            data = yf.Ticker(symbol).history(period="5d")
             if not data.empty:
                 return float(data["Close"].iloc[-1])
 

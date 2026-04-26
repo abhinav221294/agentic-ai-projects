@@ -1,5 +1,5 @@
 from utils.state import AgentState
-
+from utils.stock_mapper import normalize_stock
 
 def risk_agent(state: AgentState) -> AgentState:
     """
@@ -19,13 +19,24 @@ def risk_agent(state: AgentState) -> AgentState:
     query = raw_query.lower()
 
     memory = state.get("memory", [])
+    symbol = normalize_stock(raw_query)
+    symbol = state.get("symbol")
+
+    if symbol:
+        risk_level = "Medium ⚖️"
+        explanation = (
+        "Stocks carry market risk as their performance depends on price movements, "
+        "company performance, and investor sentiment."
+        )
 
     # ---------------------------------------------------
     # Step 2: Skip invalid short inputs
     # ---------------------------------------------------
     if memory:
         if "?" not in raw_query and not any(q in query for q in ["what", "how", "explain", "why"]):
-            state["skip"] = True
+            state["answer"] = "Please ask a clear question about risk."
+            state["agent"] = "risk_agent"
+            state["confidence"] = "LOW"
             return state
 
     # ---------------------------------------------------
@@ -84,33 +95,39 @@ def risk_agent(state: AgentState) -> AgentState:
     risk_level = "Medium ⚖️"
     explanation = ""
 
-    if any(word in query for word in high_risk_keywords):
+    if symbol:
+        risk_level = "Medium ⚖️"
+        explanation = (
+        "Stocks carry market risk as their performance depends on price movements, "
+        "company performance, and investor sentiment."
+        )
+
+    elif any(word in query for word in high_risk_keywords):
         risk_level = "High ⚠️"
         explanation = (
-            "These investments are highly volatile and can lead to "
-            "significant gains or losses in a short time."
+        "These investments are highly volatile and can lead to "
+        "significant gains or losses in a short time."
         )
 
     elif any(word in query for word in low_risk_keywords):
         risk_level = "Low ✅"
         explanation = (
-            "These are relatively stable investments with predictable "
-            "returns but lower growth potential."
+        "These are relatively stable investments with predictable "
+        "returns but lower growth potential."
         )
 
     elif any(word in query for word in medium_risk_keywords):
         risk_level = "Medium ⚖️"
         explanation = (
-            "These investments offer balanced risk and return, but "
-            "market fluctuations can still impact performance."
+        "These investments offer balanced risk and return, but "
+        "market fluctuations can still impact performance."
         )
 
     else:
+        risk_level = "Medium ⚖️"
         explanation = (
-            "Investment risk depends on market conditions, asset type, "
-            "and time horizon."
+        "Investment risk depends on asset type and market factors."
         )
-
     # ---------------------------------------------------
     # Step 6: Build response
     # ---------------------------------------------------

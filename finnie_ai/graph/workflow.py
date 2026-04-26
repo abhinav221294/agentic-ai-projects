@@ -8,6 +8,7 @@ from agents.advisor_agent import advisor_agent
 from agents.market_agent import market_agent
 from agents.news_agent import news_agent
 from utils.llm import get_llm
+import uuid
 
 def fallback_agent(state: AgentState) -> AgentState:
     query = state.get("query", "").lower()
@@ -99,6 +100,8 @@ def __build_workflow():
     #   "category": str,
     #   "answer": str
     # }
+
+    #print("ROUTER RUNNING")
     workflow = StateGraph(AgentState)
 
     # ---------------------------------------------------
@@ -135,6 +138,7 @@ def __build_workflow():
     # and determines which node to execute next
 
     def __route_decision(state: AgentState):
+        #print("ROUTE DECISION STATE:", state)
         category = state.get("category", "none")
 
         # ✅ Ensure string only
@@ -144,7 +148,7 @@ def __build_workflow():
 
         if category == "none":
             return "none"
-
+        
         return category if category in VALID_CATEGORIES else "none"
 
         ## ✅ Handle "none" BEFORE routing
@@ -173,6 +177,7 @@ def __build_workflow():
             "none": "fallback_agent"
         }
     )
+   
 
     # ---------------------------------------------------
     # Step 7: Define termination (END)
@@ -191,13 +196,36 @@ def __build_workflow():
     # ---------------------------------------------------
     # Converts graph definition into executable object
 
-    return workflow.compile()
+    return workflow.compile(checkpointer=None)
 
 app = __build_workflow()
 
 def run_workflow(state: dict):
-    #return app.invoke(state)
-    result = app.invoke(state)
+    # ✅ ADD THIS
+    if "profile" not in state:
+        state["profile"] = {
+            "age": None,
+            "risk": None,
+            "goal": None,
+            "investment_type": None
+        }
+
+    #result = app.invoke(state)
+    result = app.invoke(
+    state,
+    config={
+        "recursion_limit": 10,
+        "configurable": {
+            "thread_id": str(uuid.uuid4())   # 🔥 IMPORTANT
+            }
+        }
+    )
+
     if not result:
+        #print("❌ WORKFLOW RETURNED NONE")
         return {"answer": "Something went wrong.", "agent": "system"}
+    
+    #print("ROUTER INPUT MEMORY:", state.get("memory"))
+    #print("ROUTER CATEGORY:", result.get("category"))
+    #print("WORKFLOW RESULT:", result)
     return result
