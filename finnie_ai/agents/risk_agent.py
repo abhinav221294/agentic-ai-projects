@@ -1,69 +1,95 @@
 from utils.state import AgentState
-from utils.stock_mapper import normalize_stock
+import re
+import time
+
+
+# -------------------------
+# CENTRAL RESPONSE SETTER
+# -------------------------
+def _set(state, start, answer, confidence, extra=None):
+    state["answer"] = answer
+    state["agent"] = "risk_agent"
+    state["confidence"] = confidence
+    state["decision_source"] = "rule"
+    state["answer_source"] = "risk_logic"
+    state["execution_time"] = round(time.time() - start, 2)
+
+    if extra:
+        state.update(extra)
+
+    return state
+
 
 def risk_agent(state: AgentState) -> AgentState:
-    """
-    Risk Agent
+    start = time.time()
 
-    Purpose:
-    - Classify investment risk based on query
-    - Handle follow-up questions intelligently
-    - Provide clear explanation
-    - Add advisory tip
-    """
+    state.setdefault("trace", []).append("risk_agent")
 
-    # ---------------------------------------------------
+    # -------------------------
     # Step 1: Normalize query
-    # ---------------------------------------------------
+    # -------------------------
     raw_query = state["query"]
-    query = raw_query.lower()
+    query = re.sub(r"[^\w\s]", "", raw_query.lower().strip())
 
     memory = state.get("memory", [])
-    symbol = normalize_stock(raw_query)
-    symbol = state.get("symbol")
 
-    if symbol:
-        risk_level = "Medium ⚖️"
-        explanation = (
-        "Stocks carry market risk as their performance depends on price movements, "
-        "company performance, and investor sentiment."
-        )
+    FOLLOW_UP_WORDS = [
+        "why", "how", "explain", "reason",
+        "detail", "details", "clarify",
+        "elaborate", "more", "expand"
+    ]
 
-    # ---------------------------------------------------
+    FOLLOW_UP_PHRASES = [
+        "tell me more",
+        "explain more",
+        "can you explain",
+        "why is that"
+    ]
+
+    words = query.split()
+
+    is_followup_signal = (
+        any(w in words for w in FOLLOW_UP_WORDS) or
+        any(p in query for p in FOLLOW_UP_PHRASES)
+    )
+
+    is_follow_up = memory and is_followup_signal
+
+    state["query_type"] = "follow_up" if is_follow_up else "fresh"
+
+    # -------------------------
     # Step 2: Skip invalid short inputs
-    # ---------------------------------------------------
-    if memory:
-        if "?" not in raw_query and not any(q in query for q in ["what", "how", "explain", "why"]):
-            state["answer"] = "Please ask a clear question about risk."
-            state["agent"] = "risk_agent"
-            state["confidence"] = "LOW"
-            return state
+    # -------------------------
+    if memory and len(words) <= 2:
+        if not is_followup_signal:
+            return _set(
+                state, start,
+                "Please ask a clear question about risk.",
+                0.5
+            )
 
-    # ---------------------------------------------------
-    # Step 3: Follow-up detection
-    # ---------------------------------------------------
-    FOLLOW_UP_WORDS = ["why", "how", "explain", "reason"]
-
-    is_follow_up = any(w in query for w in FOLLOW_UP_WORDS)
-
+    # -------------------------
+    # Step 3: Get last answer
+    # -------------------------
     last_answer = next(
         (m.get("assistant", "") for m in reversed(memory) if m.get("assistant")),
         ""
     )
+    last_answer_lower = last_answer.lower()
 
-    # ---------------------------------------------------
-    # Step 4: Handle follow-up (IMPORTANT)
-    # ---------------------------------------------------
-    if is_follow_up and "risk level" in last_answer.lower():
+    # -------------------------
+    # Step 4: Handle follow-up
+    # -------------------------
+    if is_follow_up and "risk level" in last_answer_lower:
 
-        if "high" in last_answer.lower():
+        if "high" in last_answer_lower:
             risk_level = "High ⚠️"
             explanation = (
                 "Cryptocurrency is risky due to high volatility, rapid price swings, "
                 "regulatory uncertainty, and strong influence of market sentiment."
             )
 
-        elif "low" in last_answer.lower():
+        elif "low" in last_answer_lower:
             risk_level = "Low ✅"
             explanation = (
                 "These investments are considered low risk because they offer stable "
@@ -79,62 +105,55 @@ def risk_agent(state: AgentState) -> AgentState:
 
         tip = "Tip: Consider your investment horizon and financial goals."
 
-        state["answer"] = f"Risk Level: {risk_level}\n{explanation}\n\n{tip}"
-        state["agent"] = "risk_agent"
-        state["confidence"] = "HIGH"
+        return _set(
+            state, start,
+            f"Risk Level: {risk_level}\n{explanation}\n\n{tip}",
+            0.8
+        )
 
-        return state   # 🔥 EARLY RETURN (critical)
-
-    # ---------------------------------------------------
+    # -------------------------
     # Step 5: Risk classification
-    # ---------------------------------------------------
+    # -------------------------
     high_risk_keywords = ["crypto", "bitcoin", "trading", "options", "futures"]
     medium_risk_keywords = ["stock", "equity", "shares"]
     low_risk_keywords = ["fd", "fixed deposit", "bond", "government", "ppf"]
 
     risk_level = "Medium ⚖️"
-    explanation = ""
 
-    if symbol:
-        risk_level = "Medium ⚖️"
-        explanation = (
-        "Stocks carry market risk as their performance depends on price movements, "
-        "company performance, and investor sentiment."
-        )
-
-    elif any(word in query for word in high_risk_keywords):
+    if any(word in words for word in high_risk_keywords):
         risk_level = "High ⚠️"
         explanation = (
-        "These investments are highly volatile and can lead to "
-        "significant gains or losses in a short time."
+            "These investments are highly volatile and can lead to "
+            "significant gains or losses in a short time."
         )
 
-    elif any(word in query for word in low_risk_keywords):
+    elif any(word in words for word in low_risk_keywords):
         risk_level = "Low ✅"
         explanation = (
-        "These are relatively stable investments with predictable "
-        "returns but lower growth potential."
+            "These are relatively stable investments with predictable "
+            "returns but lower growth potential."
         )
 
-    elif any(word in query for word in medium_risk_keywords):
-        risk_level = "Medium ⚖️"
+    elif any(word in words for word in medium_risk_keywords):
         explanation = (
-        "These investments offer balanced risk and return, but "
-        "market fluctuations can still impact performance."
+            "These investments offer balanced risk and return, but "
+            "market fluctuations can still impact performance."
+            "Investment risk depends on asset type and market factors."
         )
 
     else:
-        risk_level = "Medium ⚖️"
         explanation = (
-        "Investment risk depends on asset type and market factors."
+            "Investment risk depends on asset type, market conditions, "
+            "and your investment horizon."
         )
-    # ---------------------------------------------------
-    # Step 6: Build response
-    # ---------------------------------------------------
+
+    # -------------------------
+    # Step 6: Final response
+    # -------------------------
     tip = "Tip: Consider your investment horizon and financial goals."
 
-    state["answer"] = f"Risk Level: {risk_level}\n{explanation}\n\n{tip}"
-    state["agent"] = "risk_agent"
-    state["confidence"] = "HIGH"
-
-    return state
+    return _set(
+        state, start,
+        f"Risk Level: {risk_level}\n{explanation}\n\n{tip}",
+        0.8
+    )

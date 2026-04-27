@@ -1,106 +1,134 @@
 from utils.state import AgentState
 from utils.llm import get_llm
 import re
-
-VALID_CATEGORIES = {"market", "risk", "advisor", "news", "rag", "none"}
 from dotenv import load_dotenv
 load_dotenv()
 
-def router_agent(state: AgentState) -> AgentState:
+VALID_CATEGORIES = {"market", "risk", "advisor", "news", "rag", "none"}
 
+
+# -------------------------
+# CENTRAL SETTER
+# -------------------------
+def _set(state, category, confidence, source, reason=None):
+    state["category"] = category
+    state["confidence"] = confidence
+    state["decision_source"] = source
+
+    state.setdefault("trace", []).append({
+        "step": "router",
+        "method": source,
+        "category": category,
+        "confidence": confidence,
+        "reason": reason
+    })
+
+    return state
+
+
+def router_agent(state: AgentState) -> AgentState:
     query = state["query"]
     memory = state.get("memory", [])
-    q = query.lower()
+
+    q = re.sub(r"[^\w\s]", "", query.lower().strip())
+
+    RAG_TOPICS = [
+        "sip", "mutual", "stocks", "stock",
+        "bonds", "bond", "inflation",
+        "diversification", "risk", "crypto", "bitcoin"
+    ]
 
     # -------------------------
-    # 1. FOLLOW-UP (keep this)
+    # SHORT QUERY HANDLING
     # -------------------------
-    if memory and len(q.split()) <= 5:
-        state["category"] = "advisor"
-        return state
+    if len(q.split()) == 1:
+        if any(topic in q for topic in RAG_TOPICS):
+            return _set(state, "rag", 0.85, "rule", "single_word_topic")
+        else:
+            return _set(state, "none", 0.85, "rule", "single_word_unknown")
 
     # -------------------------
-    # 2. STRONG SIGNALS ONLY
+    # STRONG RULES
     # -------------------------
-    if "price" in q:
-        state["category"] = "market"
-        return state
+    if any(phrase in q for phrase in [
+        "safe or not", "is it safe", "is it risky", "risky or not"
+    ]):
+        return _set(state, "risk", 0.95, "rule", "explicit_risk_check")
 
-    if "news" in q or "latest" in q:
-        state["category"] = "news"
-        return state
+    if any(phrase in q for phrase in [
+        "how to invest", "how do i invest", "where to invest",
+        "should i invest", "how to start", "how to begin"
+    ]):
+        return _set(state, "advisor", 0.95, "rule", "explicit_decision")
 
     # -------------------------
-    # 3. LLM DOES THE WORK
+    # LLM CLASSIFICATION
     # -------------------------
     try:
-        llm = get_llm(temperature=0.1)
+        llm = get_llm(temperature=0)
 
         prompt = f"""
-You are a financial intent classifier.
+You are a financial query classifier.
 
-Classify into ONE:
-market, risk, advisor, news, rag, none
+Your job is to understand INTENT (not keywords).
+
+---
+
+Classify the query into EXACTLY ONE:
+- advisor (user asking what to do / decision)
+- risk (asking about safety or risk only)
+- market (asking price/value of asset)
+- news (latest updates/news)
+- rag (definition/explanation only)
+- none (non-finance)
+
+---
 
 IMPORTANT RULES:
 
-1. If query contains BOTH:
-   - concept (what is / explain)
-   AND
-   - action/advice (invest / good / suggest / plan)
-   → ALWAYS return: advisor
+1. If user asks ANY decision → advisor wins
+2. If query has mixed intent → advisor wins
+3. If ONLY asking definition → rag
+4. If ONLY asking risk → risk
+5. If ONLY asking price → market
+6. If ONLY asking news → news
+7. If unrelated to finance → none
+8. If vague but implies choice (e.g. "safe option?") → advisor
 
-2. If query asks about:
-   - returns, investment, plan, portfolio
-   → advisor
+Also consider previous context:
+{memory}
 
-3. If query is short but finance-related:
-   - "crypto", "sip", "returns"
-   → rag (unless asking advice)
+---
 
-4. If asking safety:
-   - "safe", "risky"
-   → risk
-   If query asks:
-- "safe or not", "risky or not"
-→ always return: risk
-
-Only return advisor if:
-- explicitly asking what to do (invest, buy, suggest, plan)
-
-EXAMPLE:
-"crypto safe or not?" → risk
-
-5. Definitions only:
-   → rag
-
-Examples:
-
-"What is SIP" → rag
-"What is SIP and how to invest" → advisor
-"returns?" → advisor
-"SIP investment plan" → advisor
-"crypto" → rag
-"bond returns safe?" → advisor
-"risk?" → risk
-
-Return ONLY one word.
+Return STRICT JSON:
+{{
+  "category": "<advisor|risk|market|news|rag|none>",
+  "confidence": 0.0 to 1.0,
+  "reason": "short explanation"
+}}
 
 Query: {query}
 """
 
         res = llm.invoke(prompt)
-        out = re.sub(r"[^a-z]", "", res.content.lower())
+        text = res.content.strip()
 
-        if out in VALID_CATEGORIES:
-            state["category"] = out
-            return state
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+
+        if match:
+            data = eval(match.group())
+
+            category = data.get("category")
+            confidence = float(data.get("confidence", 0.7))
+            reason = data.get("reason", "")
+
+            if category in VALID_CATEGORIES:
+                return _set(state, category, confidence, "llm", reason)
 
     except Exception as e:
         print(f"[Router Error] {e}")
 
     # -------------------------
-    # 4. FALLBACK
+    # FALLBACK (FIXED)
     # -------------------------
-    state["category"] = "advisor"
-    return state
+    return _set(state, "advisor", 0.5, "fallback", "llm_failed")

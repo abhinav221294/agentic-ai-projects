@@ -9,181 +9,135 @@ from agents.market_agent import market_agent
 from agents.news_agent import news_agent
 from utils.llm import get_llm
 import uuid
+import time
 
+
+# -------------------------
+# FALLBACK AGENT
+# -------------------------
 def fallback_agent(state: AgentState) -> AgentState:
+    
+    start_time = time.time()
     query = state.get("query", "").lower()
 
     llm = get_llm(temperature=0.2)
 
-    response = llm.invoke(f"""User asked: "{query}"
+    try:
+        response = llm.invoke(f"""
+User asked: "{query}"
 
-You're a finance-focused assistant having a casual chat. The user asked about something outside your scope.
+You're a finance-focused assistant having a casual chat.
 
 Respond in 2–3 lines:
-1. Name the actual topic from the query, then make a brief neutral observation about it
-2. Say you usually stick to finance
-3. Name what you cover in passing — like mentioning it, not offering it
+- Mention the topic briefly
+- Say you focus on finance
+- Mention your scope casually
 
+Tone: casual, not formal
+""")
 
-                          
-RULES:
-- Use the actual topic the user asked about — do not substitute or paraphrase it
-- No explaining the off-topic subject
-- No questions
-- No filler affirmations or compliments ("great way to...", "Interesting!", "Sounds fun!")
-- No availability offers ("happy to", "feel free", "let me know", "I'm here for")
-- Don't start with "I"
-- Last line names your scope — it doesn't invite or offer
-               
-Use variation at starting:
-"Topic, huh?"
-"Oh, Topic?"
-"Ah, Topic"
-                          
-Replace:
-“well-loved” ❌
-“fascinating” ❌
-“intriguing” ❌
+        answer = response.content.strip() if response and response.content else \
+            "I usually focus on finance—things like investing and markets."
 
-With:
-“popular” ✅
-                          
-TONE: Like a person casually saying "not really my thing, I'm more into X"
+    except Exception as e:
+        answer = "I usually focus on finance—things like investing and markets."
 
-TARGET OUTPUT (match this style, don't copy it):
-"Cricket? That's a popular sport. I usually stick to finance though — things like investing and markets."
-
-BANNED WORDS/PHRASES:
-- "sounds interesting / intriguing"
-- "my focus is on"
-- "I specialize in"
-- "happy to" / "feel free" / "let me know"
-- Any compliment about the off-topic subject
-CRITICAL STYLE:
-- Keep sentences simple and spoken (not written/formal)
-- Avoid structured or formal phrasing
-- Should sound like casual speech, not a statement
-
-EXAMPLE:
-Topic? That's a popular sport.  
-I usually stick to finance though—stuff like stocks and budgeting.""")
-    
-    if not response or not response.content:
-        state["answer"] = "I usually focus on finance—things like investing and markets."
-    else:
-        state["answer"] = response.content.strip()
+    state["answer"] = answer
     state["agent"] = "fallback_agent"
+    state["execution_time"] = round(time.time() - start_time, 3)
     return state
 
 
+# -------------------------
+# BUILD WORKFLOW
+# -------------------------
 def __build_workflow():
-    """
-    Builds and compiles a LangGraph workflow for a multi-agent system.
 
-    Flow:
-    1. Start with router_agent (entry point)
-    2. Router decides category based on query
-    3. Conditional routing sends state to appropriate agent
-    4. Selected agent processes query and updates state
-    5. Workflow terminates at END
-
-    Returns:
-        Compiled LangGraph workflow (ready to invoke)
-    """
-
-    # ---------------------------------------------------
-    # Step 1: Initialize workflow with state schema
-    # ---------------------------------------------------
-    # AgentState defines structure of shared data:
-    # {
-    #   "query": str,
-    #   "category": str,
-    #   "answer": str
-    # }
-
-    #print("ROUTER RUNNING")
     workflow = StateGraph(AgentState)
 
-    # ---------------------------------------------------
-    # Step 2: Register all agents (nodes)
-    # ---------------------------------------------------
-    # Each node represents a function that:
-    # - takes state as input
-    # - modifies it
-    # - returns updated state
-
-    workflow.add_node("router_agent", router_agent)     # decides route
-    workflow.add_node("rag_agent", rag_agent)           # general Q&A
-    workflow.add_node("market_agent", market_agent)     # stock/price queries
-    workflow.add_node("risk_agent", risk_agent)         # risk-related queries
-    workflow.add_node("advisor_agent", advisor_agent)   # investment advice
-    workflow.add_node("news_agent", news_agent) 
+    # -------------------------
+    # NODES
+    # -------------------------
+    workflow.add_node("router_agent", router_agent)
+    workflow.add_node("rag_agent", rag_agent)
+    workflow.add_node("market_agent", market_agent)
+    workflow.add_node("risk_agent", risk_agent)
+    workflow.add_node("advisor_agent", advisor_agent)
+    workflow.add_node("news_agent", news_agent)
     workflow.add_node("fallback_agent", fallback_agent)
-    # ---------------------------------------------------
-    # Step 3: Define entry point
-    # ---------------------------------------------------
-    # Workflow always starts with router_agent
+
+    # -------------------------
+    # ENTRY
+    # -------------------------
     workflow.set_entry_point("router_agent")
 
-    # ---------------------------------------------------
-    # Step 4: Define valid categories
-    # ---------------------------------------------------
-    # This acts as a safeguard to avoid invalid routing
-    VALID_CATEGORIES = {"rag", "market", "risk", "advisor","news","none"}
-
-    # ---------------------------------------------------
-    # Step 5: Routing decision function
-    # ---------------------------------------------------
-    # This function reads state["category"] (set by router_agent)
-    # and determines which node to execute next
-
+    # -------------------------
+    # ROUTING LOGIC (FINAL)
+    # -------------------------
     def __route_decision(state: AgentState):
-        #print("ROUTE DECISION STATE:", state)
+        decision = None
         category = state.get("category", "none")
-
-        # ✅ Ensure string only
+        complexity = state.get("complexity", "simple")
+        confidence = state.get("confidence", 1.0)
+        query = state.get("query", "")
+        print(f"[ROUTER] category={category}, complexity={complexity}, confidence={confidence}, query={query}")        
         if not isinstance(category, str):
-            print("[Routing Error] Invalid category:", category)
-            return "none"
+            decision = "fallback_agent"
 
-        if category == "none":
-            return "none"
-        
-        return category if category in VALID_CATEGORIES else "none"
 
-        ## ✅ Handle "none" BEFORE routing
-        #if category == "none":
-        #    state["answer"] = "I can only help with finance-related questions."
-        #    return "end"   # 👈 stops execution
-    
-    # ---------------------------------------------------
-    # Step 6: Add conditional edges
-    # ---------------------------------------------------
-    # Based on output of route_decision:
-    # - "rag"     → rag_agent
-    # - "market"  → market_agent
-    # - "risk"    → risk_agent
-    # - "advisor" → advisor_agent
+        # 🔍 DEBUG LOG
+        # -------------------------
+        # 🔥 PRIORITY ROUTING
+        # -------------------------
 
+        # Always advisor if explicitly classified
+        elif category == "advisor":
+            decision = "advisor_agent"
+
+        # Low confidence OR complex → advisor
+        elif  complexity == "complex" or confidence < 0.6:
+            decision = "advisor_agent"
+
+        # -------------------------
+        # ⚡ SIMPLE DIRECT ROUTING
+        # -------------------------
+        elif  category == "market":
+            decision = "market_agent"
+
+        elif  category == "risk":
+            decision = "risk_agent"
+
+        elif  category == "news":
+            decision = "news_agent"
+
+        elif  category == "rag":
+            decision = "rag_agent"
+
+        if not decision:
+            decision = "fallback_agent"
+
+        print(f"[ROUTE → NODE] {decision} | category={category}")
+
+        state.setdefault("trace", []).append({
+        "step": "router_decision",
+        "category": category,
+        "decision": decision
+        })
+
+        return decision
+
+
+    # -------------------------
+    # CONDITIONAL EDGES
+    # -------------------------
     workflow.add_conditional_edges(
-        "router_agent",       # source node
-        __route_decision,       # decision function
-        {
-            "rag": "rag_agent",
-            "market": "market_agent",
-            "risk": "risk_agent",
-            "advisor": "advisor_agent",
-            "news": "news_agent",
-            "none": "fallback_agent"
-        }
+        "router_agent",
+        __route_decision
     )
-   
 
-    # ---------------------------------------------------
-    # Step 7: Define termination (END)
-    # ---------------------------------------------------
-    # After each agent finishes execution, workflow ends
-
+    # -------------------------
+    # TERMINATION
+    # -------------------------
     workflow.add_edge("rag_agent", END)
     workflow.add_edge("market_agent", END)
     workflow.add_edge("risk_agent", END)
@@ -191,17 +145,21 @@ def __build_workflow():
     workflow.add_edge("news_agent", END)
     workflow.add_edge("fallback_agent", END)
 
-    # ---------------------------------------------------
-    # Step 8: Compile workflow
-    # ---------------------------------------------------
-    # Converts graph definition into executable object
-
     return workflow.compile(checkpointer=None)
 
+
+# -------------------------
+# APP INSTANCE
+# -------------------------
 app = __build_workflow()
 
+
+# -------------------------
+# RUN FUNCTION
+# -------------------------
 def run_workflow(state: dict):
-    # ✅ ADD THIS
+    state.setdefault("trace", [])
+    # Ensure profile exists
     if "profile" not in state:
         state["profile"] = {
             "age": None,
@@ -210,22 +168,25 @@ def run_workflow(state: dict):
             "investment_type": None
         }
 
-    #result = app.invoke(state)
     result = app.invoke(
-    state,
-    config={
-        "recursion_limit": 10,
-        "configurable": {
-            "thread_id": str(uuid.uuid4())   # 🔥 IMPORTANT
+        state,
+        config={
+            "recursion_limit": 10,
+            "configurable": {
+                "thread_id": str(uuid.uuid4())
             }
         }
     )
 
     if not result:
-        #print("❌ WORKFLOW RETURNED NONE")
-        return {"answer": "Something went wrong.", "agent": "system"}
-    
-    #print("ROUTER INPUT MEMORY:", state.get("memory"))
-    #print("ROUTER CATEGORY:", result.get("category"))
-    #print("WORKFLOW RESULT:", result)
-    return result
+        return {"answer": "Something went wrong.", "agent": "system",
+        "trace": state.get("trace", [])}
+
+    return {
+        "answer": result.get("answer"),
+        "agent": result.get("agent"),
+        "trace": result.get("trace", []),
+        "tools_used": result.get("tools_used", []),
+        "execution_time": state.get("execution_time"),
+        "confidence": result.get("confidence")
+    }

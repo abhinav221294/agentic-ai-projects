@@ -4,13 +4,14 @@ import os
 import requests
 from utils.stock_mapper import STOCK_MAP
 import re
+import time
 
 
 def normalize_for_provider(symbol, provider):
     if provider == "finnhub":
-        return symbol.replace(".NS", "")  # RELIANCE
+        return symbol.replace(".NS", "")
     if provider == "alpha":
-        return symbol.replace(".NS", ".BSE")  # RELIANCE.BSE
+        return symbol.replace(".NS", ".BSE")
     return symbol
 
 
@@ -18,30 +19,29 @@ def get_finnhub_price(symbol: str, previous=False):
     api_key = os.getenv("FINNHUB_API_KEY")
     if not api_key:
         return None
-    
+
     try:
         symbol = normalize_for_provider(symbol, "finnhub")
         url = f"https://finnhub.io/api/v1/quote?symbol={symbol}&token={api_key}"
         response = requests.get(url, timeout=5)
         data = response.json()
-        
+
         current_price = data.get("c")
         previous_close = data.get("pc")
 
         if previous:
-              return {
-                "current": current_price,
-                "previous": previous_close
-            }
+            return {"current": current_price, "previous": previous_close}
+
         return current_price
     except:
         return None
-    
-def get_alpha_vantage_price(symbol: str):
 
+
+def get_alpha_vantage_price(symbol: str):
     api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
     if not api_key:
         return None
+
     try:
         symbol = normalize_for_provider(symbol, "alpha")
         url = "https://www.alphavantage.co/query"
@@ -49,8 +49,8 @@ def get_alpha_vantage_price(symbol: str):
             "function": "GLOBAL_QUOTE",
             "symbol": symbol,
             "apikey": api_key
-            }
-        response = requests.get(url, params=params, timeout=5) 
+        }
+        response = requests.get(url, params=params, timeout=5)
         data = response.json()
 
         price = data.get("Global Quote", {}).get("05. price")
@@ -58,22 +58,37 @@ def get_alpha_vantage_price(symbol: str):
     except:
         return None
 
-def market_agent(state: AgentState) -> AgentState:
 
-    # -------------------------
-    # Step 1: Clean query
-    # -------------------------
+# -------------------------
+# CENTRAL RESPONSE SETTER
+# -------------------------
+def _set(state, start, answer, confidence, decision_source, answer_source, extra=None):
+    state["answer"] = answer
+    state["agent"] = "market_agent"
+    state["confidence"] = confidence
+    state["decision_source"] = decision_source
+    state["answer_source"] = answer_source
+    state["execution_time"] = round(time.time() - start, 2)
+
+    if extra:
+        state.update(extra)
+
+    return state
+
+
+def market_agent(state: AgentState) -> AgentState:
+    start = time.time()
+
     raw_query = state["query"]
     query = re.sub(r"[^a-zA-Z0-9\s]", "", raw_query.lower())
 
-    # -------------------------
-    # Step 2: Detect stock
-    # -------------------------
     symbol = None
     company_name = None
-
     query_words = query.split()
 
+    # -------------------------
+    # STOCK DETECTION
+    # -------------------------
     for key, val in sorted(STOCK_MAP.items(), key=lambda x: -len(x[0])):
         key_words = key.lower().split()
 
@@ -83,25 +98,24 @@ def market_agent(state: AgentState) -> AgentState:
             break
 
     if not symbol:
-        state["answer"] = "Sorry, I couldn't identify the stock. Try Tesla, Apple, Reliance, TCS."
-        state["agent"] = "market_agent"
-        return state
+        return _set(
+            state, start,
+            "Sorry, I couldn't identify the stock. Try Tesla, Apple, Reliance, TCS.",
+            0.4, "rule", "none"
+        )
 
     price = None
-    trend = "unknown"
+    trend = "Not enough data"
     source = None
 
     # -------------------------
-    # Step 3: Try yfinance
+    # YFINANCE
     # -------------------------
     try:
         session = requests.Session()
-        session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) "
-                  "Chrome/120.0.0.0 Safari/537.36"})
+        session.headers.update({"User-Agent": "Mozilla/5.0"})
 
         stock = yf.Ticker(symbol, session=session)
-
         hist = stock.history(period="5d", interval="1d")
 
         if not hist.empty and "Close" in hist:
@@ -110,7 +124,7 @@ def market_agent(state: AgentState) -> AgentState:
             if len(hist) >= 2:
                 trend = "📈 Up" if hist["Close"].iloc[-1] > hist["Close"].iloc[-2] else "📉 Down"
             else:
-                trend = "stable"
+                trend = "No major movement"
 
             source = "yfinance"
 
@@ -118,7 +132,7 @@ def market_agent(state: AgentState) -> AgentState:
         print(f"yfinance error: {e}")
 
     # -------------------------
-    # Step 4: Finnhub fallback
+    # FINNHUB
     # -------------------------
     if price is None:
         data = get_finnhub_price(symbol, previous=True)
@@ -127,44 +141,65 @@ def market_agent(state: AgentState) -> AgentState:
             price = data["current"]
             prev = data.get("previous", 0)
 
-            trend = "📈 Up" if price > prev else "📉 Down"
+            if prev:
+                trend = "📈 Up" if price > prev else "📉 Down"
+
             source = "Finnhub"
 
     # -------------------------
-    # Step 5: Alpha fallback
+    # ALPHA
     # -------------------------
     if price is None:
         alpha_price = get_alpha_vantage_price(symbol)
 
         if alpha_price:
             price = alpha_price
-            trend = "unknown"
             source = "Alpha Vantage"
 
     # -------------------------
-    # Step 6: Final response
+    # RESPONSE
     # -------------------------
+    source_map = {
+        "yfinance": "yfinance",
+        "Finnhub": "finnhub",
+        "Alpha Vantage": "alpha_vantage"
+    }
+    normalized_source = source_map.get(source, "unknown")
+
     if price:
+        tools = state.setdefault("tools_used", [])
+
+        if source == "yfinance" and "yfinance" not in tools:
+            tools.append("yfinance")
+        elif source == "Finnhub" and "finnhub" not in tools:
+            tools.append("finnhub")
+        elif source == "Alpha Vantage" and "alpha_vantage" not in tools:
+            tools.append("alpha_vantage")
+
         currency = "₹" if symbol.endswith(".NS") else "$"
 
-        state["answer"] = (
+        answer = (
             f"{company_name} ({symbol}) is trading at {currency}{round(price, 2)}\n"
             f"Trend: {trend}\n"
             f"(Source: {source})"
         )
 
-        state["agent"] = "market_agent"
-        state["confidence"] = "HIGH" if source == "yfinance" else "MEDIUM"
-        return state
+        return _set(
+            state, start,
+            answer,
+            0.9 if normalized_source == "yfinance" else 0.7,
+            "tool",
+            normalized_source
+        )
 
     # -------------------------
-    # Step 7: Failure
+    # FAILURE
     # -------------------------
-    state["answer"] = (
-        f"I couldn't fetch stock data for {company_name} right now.\n"
-        "Please try again later."
+    return _set(
+        state, start,
+        f"I'm unable to fetch stock data for {company_name} right now.\nPlease try again shortly.",
+        0.4,
+        "tool",
+        "none",
+        {"error": "price_fetch_failed"}
     )
-
-    state["agent"] = "market_agent"
-    state["confidence"] = "LOW"
-    return state

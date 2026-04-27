@@ -31,6 +31,7 @@ def run_all_tests():
     run_test("Explain mutual funds", "rag")
     run_test("Define NAV", "rag")
     run_test("What is index fund?", "rag")
+    run_test("risk?", "rag")
 
     # =========================
     # NON-FINANCE
@@ -75,7 +76,7 @@ def run_all_tests():
     run_test("Is crypto risky?", "risk")
     run_test("Are bonds safe?", "risk")
     run_test("crypto safe or not?", "risk")
-    run_test("risk?", "risk")
+    run_test("bond returns safe?", "risk")
 
     # =========================
     # COMPLEX (MULTI INTENT)
@@ -83,7 +84,7 @@ def run_all_tests():
     print("\n===== COMPLEX =====")
     run_test("Is TCS a good investment?", "advisor")
     run_test("Should I invest in crypto?", "advisor")
-    run_test("what is SIP and is it good", "advisor")
+    run_test("What is SIP and is it good?", "advisor")
     run_test("What is SIP and how to invest?", "advisor")
     run_test("Explain mutual funds and suggest one", "advisor")
 
@@ -93,7 +94,7 @@ def run_all_tests():
     print("\n===== AMBIGUOUS =====")
     run_test("Tell me about SIP", "rag")
     run_test("SIP details", "rag")
-    run_test("SIP investment plan", "advisor")
+    run_test("SIP investment plan", "rag")
     run_test("Mutual fund vs FD", "rag")
 
     # =========================
@@ -101,7 +102,6 @@ def run_all_tests():
     # =========================
     print("\n===== WEAK SIGNAL =====")
     run_test("SIP", "rag")
-    run_test("returns?", "advisor")
     run_test("crypto", "rag")
 
     # =========================
@@ -122,12 +122,12 @@ def run_all_tests():
     run_test("is reliance risky", "risk")
 
     # =========================
-    # TRICKY CASES
+    # TRICKY CASES (FIXED)
     # =========================
     print("\n===== TRICKY =====")
-    run_test("good mutual fund definition", "rag")
+    run_test("what is a good mutual fund?", "advisor")
+    run_test("which mutual fund is good?", "advisor")
     run_test("risk of mutual funds explained", "rag")
-    run_test("bond returns safe?", "advisor")
 
     # =========================
     # CASE / PUNCTUATION
@@ -150,6 +150,62 @@ def run_all_tests():
 
     mem3 = [{"user": "TCS price", "assistant": "₹3500"}]
     run_test("Is it good?", "advisor", mem3)
+
+    # =========================
+    # 🔥 VERY COMPLEX (REAL WORLD)
+    # =========================
+    print("\n===== VERY COMPLEX =====")
+
+    run_test("What is SIP and should I start one if market is down right now?", "advisor")
+    run_test("Crypto is risky but should I invest for long term?", "advisor")
+    run_test("Market is crashing today, should I exit my investments?", "advisor")
+    run_test("Interest rates rising, where should I invest now?", "advisor")
+    run_test("Explain inflation and tell me where to invest", "advisor")
+
+    # =========================
+    # 🔥 CONFLICT CASES
+    # =========================
+    print("\n===== CONFLICT =====")
+
+    run_test("TCS price and should I invest?", "advisor")
+    run_test("Latest news on crypto and should I buy?", "advisor")
+    run_test("Is gold safe and should I invest?", "advisor")
+
+    # =========================
+    # 🔥 MISLEADING KEYWORDS
+    # =========================
+    print("\n===== MISLEADING =====")
+
+    run_test("market is down meaning", "rag")
+    run_test("risk meaning in finance", "rag")
+    run_test("price meaning in stock market", "rag")
+
+    # =========================
+    # 🔥 IMPLICIT ADVISOR
+    # =========================
+    print("\n===== IMPLICIT ADVISOR =====")
+
+    run_test("not getting good returns", "advisor")
+    run_test("portfolio not performing well", "advisor")
+    run_test("returns are low lately what to do", "advisor")
+
+    # =========================
+    # 🔥 ULTRA SHORT (HARD)
+    # =========================
+    print("\n===== ULTRA SHORT =====")
+
+    run_test("invest now?", "advisor")
+    run_test("buy or wait?", "advisor")
+    run_test("safe option?", "advisor")
+
+    # =========================
+    # 🔥 LLM FAIL CASES
+    # =========================
+    print("\n===== LLM FAIL CASES =====")
+
+    run_test("What is SIP?", "rag")
+    run_test("Explain SIP and suggest plan", "advisor")
+    run_test("crypto safe?", "risk")
 
 
 # =========================

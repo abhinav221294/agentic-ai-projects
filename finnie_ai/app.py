@@ -3,13 +3,99 @@ from ui.tab1_chat import render_chat_tab
 from ui.tab2_portfolio import render_portfolio_tab
 from ui.tab3_market import render_market_tab
 from ui.tab4_news import render_news_tab
+from dotenv import load_dotenv
 import os
+
+load_dotenv()
+
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
 st.set_page_config(page_title="Finnie AI", layout="wide")
 
+# -------------------------
+# ENV VALIDATION (startup)
+# -------------------------
+REQUIRED_KEYS = [
+    "OPENAI_API_KEY",
+    "FINNHUB_API_KEY",
+    "TAVILY_API_KEY"
+]
+
+missing = [key for key in REQUIRED_KEYS if not os.getenv(key)]
+
+if missing:
+    raise ValueError(f"❌ Missing required env variables: {', '.join(missing)}")
+
+
 # -------------------------------
-# GLOBAL CSS (FINAL CLEAN)
+# 🔐 AUTH CONFIG
+# -------------------------------
+
+def load_users():
+    raw = os.getenv("APP_USERS", "")
+    users = {}
+
+    for pair in raw.split(","):
+        if ":" in pair:
+            username, password = pair.split(":")
+            users[username.strip()] = password.strip()
+
+    return users
+
+VALID_USERS = load_users()
+
+
+def load_api_keys():
+    raw = os.getenv("API_KEYS", "")
+    return set(k.strip() for k in raw.split(","))
+
+VALID_KEYS = load_api_keys()
+
+# -------------------------------
+# 🔐 LOGIN FUNCTION
+# -------------------------------
+def login():
+    st.markdown("<h2 style='text-align:center;'>🔐 Login to Finnie AI</h2>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1,2,1])
+
+    with col2:
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+
+        if st.button("Login", use_container_width=True):
+            if username in VALID_USERS and VALID_USERS[username] == password:
+                st.session_state["authenticated"] = True
+                st.session_state["user"] = username
+                st.success("Login successful")
+                st.rerun()
+            else:
+                st.error("Invalid credentials")
+
+# -------------------------------
+# 🔐 SESSION INIT
+# -------------------------------
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+# -------------------------------
+# 🔐 BLOCK UNAUTHORIZED USERS
+# -------------------------------
+if not st.session_state["authenticated"]:
+    login()
+    st.stop()
+
+# -------------------------------
+# 🔑 OPTIONAL API KEY CHECK
+# -------------------------------
+#api_key = st.text_input("Enter API Key", type="password")
+
+#if api_key not in VALID_KEYS:
+#    st.warning("Invalid API Key")
+#    st.stop()
+
+# -------------------------------
+# GLOBAL CSS (UNCHANGED)
 # -------------------------------
 st.markdown("""
 <style>
@@ -50,7 +136,7 @@ div[data-testid="stVerticalBlock"] > div {
     margin: auto;
 }
 
-/* 🔥 Sticky Chat Input (FINAL FIX) */
+/* Sticky Chat Input */
 div[data-testid="stChatInput"] {
     position: sticky;
     bottom: 0;
@@ -61,7 +147,7 @@ div[data-testid="stChatInput"] {
     z-index: 10;
 }
 
-/* Add a subtle gradient instead of hard bar */
+/* Gradient */
 div[data-testid="stChatInput"]::before {
     content: "";
     position: absolute;
@@ -109,10 +195,11 @@ button:hover {
 # -------------------------------
 # HEADER
 # -------------------------------
-st.markdown("""
+st.markdown(f"""
 <div style="padding-left:2rem;">
     <h1 style='margin-bottom:4px;'>🤖 Finnie AI</h1>
     <p style='color:gray; margin-top:0; font-size:14px;'>AI-powered financial assistant</p>
+    <p style='font-size:12px;'>👤 Logged in as: <b>{st.session_state['user']}</b></p>
 </div>
 """, unsafe_allow_html=True)
 
