@@ -72,13 +72,19 @@ def calculate_lumpsum_future_value(principal, annual_return=10, years=10):
 
 
 # Allocation mapping
-ALLOCATION_MAP  = {
-("low", "income"): (60, 25, 15),
-        ("low", "growth"): (40, 40, 20),
-        ("medium", "growth"): (60, 25, 15),
-        ("medium", "income"): (40, 40, 20),
-        ("high", "growth"): (70, 20, 10),
-        ("high", "income"): (50, 30, 20),
+ALLOCATION_MAP = {
+
+    # LOW RISK
+    ("low", "income"): (30, 50, 20),
+    ("low", "growth"): (40, 40, 20),
+
+    # MEDIUM
+    ("medium", "income"): (40, 40, 20),
+    ("medium", "growth"): (60, 25, 15),
+
+    # HIGH RISK
+    ("high", "income"): (70, 20, 10),
+    ("high", "growth"): (80, 15, 5),
 }
 
 
@@ -93,7 +99,6 @@ def advisor_agent(state: AgentState) -> AgentState:
     raw_query = state.get("query", "").strip()
     query = re.sub(r"[^\w\s]", " ", raw_query).lower().strip()
     amount_match = re.search(r"\b\d{4,7}\b", query)
-
 
     # -------------------------
     # STAGE DETECTION (CRITICAL)
@@ -219,12 +224,65 @@ def advisor_agent(state: AgentState) -> AgentState:
     if amount_match:
         profile["amount"] = int(amount_match.group())
 
+    # ✅ ADD THIS BLOCK HERE
+    expected = state.get("expected_next_input")
+
+    if expected == "risk" and profile.get("risk"):
+        state.pop("expected_next_input", None)
+
+    elif expected == "goal" and profile.get("goal"):
+        state.pop("expected_next_input", None)
+
+    elif expected == "investment_type" and profile.get("investment_type"):
+        state.pop("expected_next_input", None)
+
+    elif expected == "amount" and profile.get("amount"):
+        state.pop("expected_next_input", None)  
+    
+
+    missing = []
+
+    if not profile.get("risk"):
+        missing.append("risk level (low / medium / high)")
+
+    if not profile.get("goal"):
+        missing.append("goal (growth / income)")
+
+    if not profile.get("investment_type"):
+        missing.append("investment type (SIP / lump sum)")
+
+    # -------------------------
+    # NO INFO → ask everything
+    # -------------------------
+    if missing:
+        followup = "\n\nTo refine this further, you can also share:\n"
+        followup += "\n".join([f"- {m}" for m in missing])
+
+        answer = f"""
+Got it — I can help with that.
+
+{followup}
+
+Can you share that?
+"""
+        state["profile"] = profile
+        state["stage"] = "collect_profile"
+
+        return _set(
+        state, start,
+        answer,
+        "advisor_agent",
+        0.9,
+        "clarification",
+        "advisor",
+        "ask_missing"
+    )
+
     
     # -------------------------
     # FOLLOW-UP INTENT
     # -------------------------
 
-   
     suggestion_block = ""
 
     already_suggested = False
@@ -277,16 +335,21 @@ def advisor_agent(state: AgentState) -> AgentState:
     amount = profile.get("amount")
 
     amount_block = ""
-
+    
     if amount and risk and goal:
 
-        amount_block = f"\n💰 Monthly SIP: ₹{amount:,}\n\n"
+        if investment == "sip":
+                amount_block = f"\n💰 Monthly SIP: ₹{amount:,}\n\n"
+        elif investment == "lump sum":
+            amount_block = f"\n💰 Lump Sum: ₹{amount:,}\n\n"
+        else:
+            amount_block = f"\n💰 Investment Amount: ₹{amount:,}\n\n"
 
         labels = [
-        ("Debt funds", "stable income, low risk"),
-        ("Hybrid funds", "balanced returns with some growth"),
-        ("Gold/Liquid", "safety and liquidity")
-        ]
+                ("Equity / Dividend funds", "growth + income"),
+                ("Debt / Hybrid funds", "stability + income"),
+            ("Gold / Liquid", "diversification")
+            ]
         
         alloc_values = ALLOCATION_MAP.get((risk, goal), (40, 40, 20))
         amount_block += "\n📊 Suggested split:\n\n"
@@ -465,6 +528,13 @@ def advisor_agent(state: AgentState) -> AgentState:
 
         execution_block = ""
 
+        labels = ["Equity", "Debt", "Gold"]
+
+        allocation_hint = "\n".join([
+        f"- {alloc_values[i]}% {labels[i]}"
+        for i in range(3)
+        ])
+
         # ✅ ONLY read from state
         selected_funds = state.get("selected_funds", [])
 
@@ -521,51 +591,7 @@ def advisor_agent(state: AgentState) -> AgentState:
     needs_news = any(w in query for w in ["news", "latest"])
 
 
-    missing = []
-
-    if not profile.get("risk"):
-        missing.append("risk level (low / medium / high)")
-
-    if not profile.get("goal"):
-        missing.append("goal (growth / income)")
-
-    if not profile.get("investment_type"):
-        missing.append("investment type (SIP / lump sum)")
-
-
-
-    # -------------------------
-    # NO INFO → ask everything
-    # -------------------------
-    if not any([profile.get("risk"), profile.get("goal"), profile.get("investment_type")]):
-        missing = [
-        "risk level (low / medium / high)",
-        "goal (growth / income)",
-        "investment type (SIP / lump sum)"
-    ]
-        if missing:
-            followup = "\n\nTo refine this further, you can also share:\n"
-            followup += "\n".join([f"- {m}" for m in missing])
-
-        answer = f"""
-Got it — I can help with that.
-
-{followup}
-
-Can you share that?
-"""     
-        state["profile"] = profile
-        state["stage"] = "collect_profile"
-
-        return _set(
-        state, start,
-        answer,
-        "advisor_agent",
-        0.9,
-        "clarification",
-        "advisor",
-        "ask_missing"
-    )
+    
 
     # -------------------------
     # TOOL ORCHESTRATION (FIXED)
@@ -813,134 +839,24 @@ Can you share that?
         if profile.get("investment_type") == "sip":
             advice_lines.append("Continue SIP for disciplined investing over time")
 
+        if risk == "high" and goal == "income":
+            insights.append(
+            "Focus on dividend-paying equities and income-generating assets while maintaining some stability."
+            )
+        
         allocation_hint = ""
 
         # -------------------------
         # FULL CASE (risk + goal)
         # -------------------------
-        if risk and goal:
+        labels = ["Equity", "Debt", "Gold"]
 
-            if risk == "low" and goal == "income":
-                allocation_hint = alloc([
-            "- 60% Debt mutual funds (stable income)",
-            "- 25% Hybrid funds (balanced)",
-            "- 15% Gold or liquid funds (safety)"
-            ])
+        alloc_values = ALLOCATION_MAP.get((risk, goal), (40, 40, 20))
 
-            elif risk == "low" and goal == "growth":
-                allocation_hint = alloc([
-            "- 40% Debt funds (stability)",
-            "- 40% Hybrid funds (balanced growth)",
-            "- 20% Equity index funds (growth)"
-            ])
-
-            elif risk == "medium" and goal == "growth":
-                allocation_hint = alloc([
-                "- 60% Equity funds (growth)",
-                "- 25% Debt funds (stability)",
-                "- 15% Gold (diversification)"
-                ])
-
-            elif risk == "medium" and goal == "income":
-                allocation_hint = alloc([
-                "- 40% Equity funds",
-                "- 40% Debt funds",
-                "- 20% Gold"
-                ])
-
-            elif risk == "high" and goal == "growth":
-                allocation_hint = alloc([
-                "- 70% Equity funds (high growth)",
-                "- 20% Debt funds",
-            "- 10% Gold"
-                ])
-
-            elif risk == "high" and goal == "income":
-                allocation_hint = alloc([
-                "- 50% Equity funds",
-                "- 30% Debt funds",
-                "- 20% Gold"
-                ])
-
-        # -------------------------
-        # ONLY RISK
-        # -------------------------
-        elif risk and not goal:
-
-            if risk == "low":
-                allocation_hint = alloc([
-                "- 30% Equity",
-                "- 50% Debt",
-                "- 20% Gold"
-                ])
-
-            elif risk == "medium":
-                allocation_hint = alloc([
-                "- 50% Equity",
-                "- 30% Debt",
-                "- 20% Gold"
-                ])
-
-            elif risk == "high":
-                allocation_hint = alloc([
-                "- 70% Equity",
-                "- 20% Debt",
-                "- 10% Gold"
-                ])
-
-        # -------------------------
-        # ONLY GOAL
-        # -------------------------
-        elif goal and not risk:
-
-            if goal == "growth":
-                allocation_hint = alloc([
-                "- 60% Equity",
-                "- 25% Debt",
-                "- 15% Gold"
-                ])
-
-            elif goal == "income":
-                allocation_hint = alloc([
-                "- 30% Equity",
-                "- 50% Debt",
-                "- 20% Gold"
-                ])
-
-        # -------------------------
-        # ONLY INVESTMENT TYPE
-        # -------------------------
-        elif investment and not risk and not goal:
-
-            if investment == "sip":
-                allocation_hint = alloc([
-                "Start with a SIP in a balanced mutual fund:",
-                "",
-                "- 50% Hybrid funds",
-                "- 30% Debt funds",
-                "- 20% Equity funds"
-                ])
-
-            elif investment == "lump sum":
-                allocation_hint = alloc([
-                "Invest gradually instead of all at once:",
-                "",
-                "- Start with debt/liquid funds",
-                "- Shift to equity over time (STP approach)"
-                ])
-
-        # -------------------------
-        # DEFAULT FALLBACK
-        # -------------------------
-        else:
-            allocation_hint = alloc([
-            "Here’s a safe starting allocation you can consider:",
-            "",
-            "- 40% Equity index funds (growth)",
-            "- 40% Debt funds (stability)",
-            "- 20% Gold or liquid funds (safety)"
-            ])
-
+        allocation_hint = "\n".join([
+        f"- {alloc_values[i]}% {labels[i]}"
+            for i in range(3)
+        ])
 
         if advice_lines:
                 advice_text = "\n".join(f"- {line}" for line in advice_lines)

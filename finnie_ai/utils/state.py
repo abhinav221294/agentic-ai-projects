@@ -23,3 +23,4 @@ class AgentState(TypedDict, total=False):
     "suggestion",
     "execution"]]
     selected_funds: List[str]
+    expected_next_input: float

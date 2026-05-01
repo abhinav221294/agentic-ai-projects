@@ -198,6 +198,17 @@ market / risk / advisor / news / rag / none"""
 # -------------------------
 def router_agent(state: AgentState) -> AgentState:
     query = state.get("query", "")
+
+    expected = state.get("expected_next_input")
+
+    if expected:
+        return _set(
+        state,
+        "advisor",
+        0.99,
+        "expected_input",
+        expected
+        )
     
     # -------------------------
     # MEMORY STAGE SYNC
@@ -207,13 +218,41 @@ def router_agent(state: AgentState) -> AgentState:
         last_stage = memory[-1].get("stage")
         if last_stage:
             state["stage"] = last_stage
+
+    if memory and len(memory) >= 1:
+        last_stage = memory[-1].get("stage")
+
+        if last_stage == "ask_investment_type":
+            state["stage"] = "advisor"
+            return _set(state, "advisor", 0.95, "followup", "investment_type_response")
     
+    if memory:
+        last_agent = memory[-1].get("agent")
+
+        if last_agent == "advisor_agent":
+            if any(word in query for word in ["sip", "lump", "lumpsum"]):
+                return _set(state, "advisor", 0.95, "followup", "investment_type_response")
+    
+
     vague_patterns = ["is it good", "should i", "worth it"]
     query_clean = re.sub(r"[^\w\s]", "", query.lower()).strip()
 
     if any(p in query_clean for p in vague_patterns):
         return _set(state, "advisor", 0.95, "vague_guardrail")
+    
+    amount_patterns = [
+        r"\b\d{3,7}\b",
+        r"amount\s*\d+",
+        r"invest\s*\d+",
+        r"\d+\s*rs",
+        r"₹\s*\d+"
+        ]
 
+    if any(re.search(p, query) for p in amount_patterns):
+        if memory and memory[-1].get("agent") == "advisor_agent":
+            return _set(state, "advisor", 0.96, "followup", "amount_detected")
+
+    
     # -------------------------
     # STEP 1: PRIMARY CLASSIFICATION
     # -------------------------
