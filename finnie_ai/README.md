@@ -230,7 +230,8 @@ python -m tests.test_router
 
 ## 📊 Performance
 
-* Router Accuracy: **~98% (55/56 test cases)**
+* Router Accuracy: **100% (71/71 test cases)**
+* Router Consistency: **87.5% (7/8 test cases)**
 * Handles:
 
   * Mixed intent queries
