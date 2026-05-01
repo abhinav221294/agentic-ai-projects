@@ -1,7 +1,9 @@
 from utils.state import AgentState
 from utils.llm import get_llm
 import re
+from utils.prompts import ROUTER_PROMPT
 from dotenv import load_dotenv
+
 load_dotenv()
 
 VALID_CATEGORIES = {"market", "risk", "advisor", "news", "rag", "none"}
@@ -16,119 +18,234 @@ def _set(state, category, confidence, source, reason=None):
     state["decision_source"] = source
 
     state.setdefault("trace", []).append({
-        "step": "router",
-        "method": source,
+        "agent": "router_agent_v3",
+        "action": "classify",
         "category": category,
-        "confidence": confidence,
+        "method": source,
         "reason": reason
     })
 
     return state
 
 
-def router_agent(state: AgentState) -> AgentState:
-    query = state["query"]
+# -------------------------
+# CLEAN QUERY
+# -------------------------
+def clean_query(query: str):
+    return re.sub(r"[^\w\s]", "", query.lower().strip())
+
+
+# -------------------------
+# BUILD FULL PROMPT (MAIN + ROUTER)
+# -------------------------
+def build_full_prompt(state):
+    query = state.get("query", "")
+    stage = state.get("stage", "")
+    profile = state.get("profile", {})
     memory = state.get("memory", [])
 
-    q = re.sub(r"[^\w\s]", "", query.lower().strip())
+    #context = "\n".join([str(m) for m in memory[-3:]])
+    context = "\n".join([
+    f"User: {m.get('query')} | Category: {m.get('category')}"
+    for m in memory[-3:]
+    ])
 
-    RAG_TOPICS = [
-        "sip", "mutual", "stocks", "stock",
-        "bonds", "bond", "inflation",
-        "diversification", "risk", "crypto", "bitcoin"
-    ]
+    MAIN_PROMPT = """You are a financial assistant system.
 
-    # -------------------------
-    # SHORT QUERY HANDLING
-    # -------------------------
-    if len(q.split()) == 1:
-        if any(topic in q for topic in RAG_TOPICS):
-            return _set(state, "rag", 0.85, "rule", "single_word_topic")
-        else:
-            return _set(state, "none", 0.85, "rule", "single_word_unknown")
+You have access to:
+- User profile
+- Conversation stage
+- Past conversation
 
-    # -------------------------
-    # STRONG RULES
-    # -------------------------
-    if any(phrase in q for phrase in [
-        "safe or not", "is it safe", "is it risky", "risky or not"
-    ]):
-        return _set(state, "risk", 0.95, "rule", "explicit_risk_check")
-
-    if any(phrase in q for phrase in [
-        "how to invest", "how do i invest", "where to invest",
-        "should i invest", "how to start", "how to begin"
-    ]):
-        return _set(state, "advisor", 0.95, "rule", "explicit_decision")
-
-    # -------------------------
-    # LLM CLASSIFICATION
-    # -------------------------
-    try:
-        llm = get_llm(temperature=0)
-
-        prompt = f"""
-You are a financial query classifier.
-
-Your job is to understand INTENT (not keywords).
-
----
-
-Classify the query into EXACTLY ONE:
-- advisor (user asking what to do / decision)
-- risk (asking about safety or risk only)
-- market (asking price/value of asset)
-- news (latest updates/news)
-- rag (definition/explanation only)
-- none (non-finance)
-
----
-
-IMPORTANT RULES:
-
-1. If user asks ANY decision → advisor wins
-2. If query has mixed intent → advisor wins
-3. If ONLY asking definition → rag
-4. If ONLY asking risk → risk
-5. If ONLY asking price → market
-6. If ONLY asking news → news
-7. If unrelated to finance → none
-8. If vague but implies choice (e.g. "safe option?") → advisor
-
-Also consider previous context:
-{memory}
-
----
-
-Return STRICT JSON:
-{{
-  "category": "<advisor|risk|market|news|rag|none>",
-  "confidence": 0.0 to 1.0,
-  "reason": "short explanation"
-}}
-
-Query: {query}
+Use this information to understand user intent.
 """
 
-        res = llm.invoke(prompt)
-        text = res.content.strip()
+    return f"""
+{MAIN_PROMPT}
 
-        match = re.search(r"\{.*\}", text, re.DOTALL)
+-------------------------
+USER CONTEXT
+-------------------------
+Stage: {stage}
+Profile: {profile}
+History:
+{context}
 
-        if match:
-            data = eval(match.group())
+-------------------------
+TASK
+-------------------------
+{ROUTER_PROMPT.format(query=query)}
+"""
 
-            category = data.get("category")
-            confidence = float(data.get("confidence", 0.7))
-            reason = data.get("reason", "")
 
-            if category in VALID_CATEGORIES:
-                return _set(state, category, confidence, "llm", reason)
+# -------------------------
+# AGENT 1: PRIMARY CLASSIFIER
+# -------------------------
+def classify_agent(state):
+    llm = get_llm(model="gpt-4o", temperature=0)
 
-    except Exception as e:
-        print(f"[Router Error] {e}")
+    prompt = build_full_prompt(state)
+    res = llm.invoke(prompt)
+
+    # Clean output (very important)
+    category = res.content.strip().lower()
+    category = category.split()[0]
+
+    if category in VALID_CATEGORIES:
+        return {
+            "category": category,
+            "confidence": 0.8,
+            "reason": "primary_classification"
+        }
+
+    return None
+
+
+# -------------------------
+# AGENT 2: VALIDATOR (SELF-CHECK)
+# -------------------------
+def validator_agent(state, first_result):
+    llm = get_llm(model="gpt-4o-mini", temperature=0.3)
+
+    query = state.get("query", "").strip().lower()
+    stage = state.get("stage", "")
+    profile = state.get("profile", {})
+    memory = state.get("memory", [])
+
+    context = "\n".join([str(m) for m in memory[-3:]])
+
+
+    prompt = f"""You are a strict financial intent validator.
+
+Your job is to VERIFY and CORRECT the classification.
+
+Be critical. Do NOT agree blindly.
+
+-------------------------
+CONTEXT
+-------------------------
+Stage: {stage}
+Profile: {profile}
+Recent History:
+{context}
+
+-------------------------
+QUERY
+-------------------------
+{query}
+
+Initial classification: {first_result["category"]}
+
+-------------------------
+INTENT RULES
+-------------------------
+advisor → user wants decision or recommendation  
+rag → user wants explanation or learning  
+risk → user evaluates safety only (not asking what to do)  
+market → price queries  
+news → updates  
+none → non-finance  
+
+-------------------------
+PRIORITY (IMPORTANT)
+-------------------------
+1. none  
+2. advisor  
+3. rag  
+4. risk  
+5. market  
+6. news  
+
+-------------------------
+KEY LOGIC
+-------------------------
+- "safe option" → advisor (NOT risk)
+- "risk explained" → rag (NOT risk)
+- "risk" alone → rag
+- "is it safe" → risk
+
+IMPORTANT:
+Use context when needed.
+Do NOT rely only on keywords.
+
+-------------------------
+TASK
+-------------------------
+
+If initial classification is WRONG → correct it  
+If it is correct → keep it  
+
+Return ONLY one word:
+market / risk / advisor / news / rag / none"""
+
+    res = llm.invoke(prompt)
+
+    category = res.content.strip().lower()
+    category = category.replace(".", "").replace(",", "")
+    category = category.split()[0]
+
+    if category in VALID_CATEGORIES:
+        return {
+            "category": category,
+            "confidence": 0.7,
+            "reason": "validated"
+        }
+
+    return None
+
+# -------------------------
+# ROUTER AGENT V3 (PURE AGENTIC)
+# -------------------------
+def router_agent(state: AgentState) -> AgentState:
+    query = state.get("query", "")
+    
+    # -------------------------
+    # MEMORY STAGE SYNC
+    # -------------------------
+    memory = state.get("memory", [])
+    if memory:
+        last_stage = memory[-1].get("stage")
+        if last_stage:
+            state["stage"] = last_stage
+    
+    vague_patterns = ["is it good", "should i", "worth it"]
+    query_clean = re.sub(r"[^\w\s]", "", query.lower()).strip()
+
+    if any(p in query_clean for p in vague_patterns):
+        return _set(state, "advisor", 0.95, "vague_guardrail")
 
     # -------------------------
-    # FALLBACK (FIXED)
+    # STEP 1: PRIMARY CLASSIFICATION
     # -------------------------
-    return _set(state, "advisor", 0.5, "fallback", "llm_failed")
+    first = classify_agent(state)
+
+    if not first:
+        return _set(state, "advisor", 0.5, "fallback", "invalid_llm_output")
+
+    # -------------------------
+    # STEP 2: VALIDATION
+    # -------------------------
+    second = validator_agent(state, first)
+
+    if second:
+    # Only override if DIFFERENT and HIGH CONFIDENCE
+        if second["category"] != first["category"]:
+            if second["confidence"] >= 0.9:
+                return _set(
+                state,
+                second["category"],
+                second["confidence"],
+                "agent_corrected",
+                second["reason"]
+                )
+
+    # -------------------------
+    # STEP 3: FALLBACK TO FIRST
+    # -------------------------
+    return _set(
+        state,
+        first["category"],
+        first["confidence"],
+        "agent",
+        first["reason"]
+    )

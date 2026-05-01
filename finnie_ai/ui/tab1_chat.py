@@ -59,22 +59,105 @@ def render_chat_tab():
                     st.session_state.current_index = len(st.session_state.memory) - 1
                     st.session_state.pending_query = q_sample
                     st.rerun()
+
+    # -------------------------------
+    # Chat history
+    # -------------------------------
+    display_memory = st.session_state.memory[-20:]  # only UI limit
+
+    for i, m in enumerate(display_memory):
+
+        # User
+        with st.chat_message("user"):
+            st.markdown(m["user"])
+
+        # Assistant
+        if m["assistant"] is not None:
+            with st.chat_message("assistant"):
+
+                # 🔥 ONLY animate last message
+                if not m.get("animated", False):
+                    placeholder = st.empty()
+                    words = m["assistant"].split(" ")
+                    full_text = ""
+
+                    for w in words:
+                        full_text += w + " "
+                        placeholder.markdown(full_text)
+                        time.sleep(0.02)
+                    m["animated"] = True   # 👈 ADD THIS LINE
+                else:
+                    st.markdown(m["assistant"])
+
+                if m.get("agent"):
+                    st.caption(f"🧠 {m['agent']}")
+                    
+                if m.get("trace"):
+
+                    trace_steps = []
+
+                    for t in m["trace"]:
+
+                        if isinstance(t, dict):
+                            agent = t.get("agent", "")
+                            action = t.get("action", "")
+
+                            if agent:
+                                if action:
+                                    trace_steps.append(f"{agent} ({action})")
+                                else:
+                                    trace_steps.append(agent)
+
+                            else:
+                                trace_steps.append(str(t))
+                        else:
+                                trace_steps.append(str(t))
+
+                    if trace_steps:  # 👈 prevents empty output
+                        trace_text = " → ".join(trace_steps)
+                        st.caption(f"🧠 Flow: {trace_text}")
+
+    if st.session_state.pending_query and st.session_state.memory[-1]["assistant"] is None:
+        with st.chat_message("assistant"):
+            st.markdown("🤖 Thinking...")
+    # -------------------------------
+    # Chat input (NO extra spacing)
+    # -------------------------------
+    user_input = st.chat_input("Ask your financial question...")
+
     # -------------------------------
     # New query
     # -------------------------------
     if st.session_state.pending_query:
 
-        q = st.session_state.pending_query  # always latest
+        q = st.session_state.pending_query  
 
-        with st.spinner("🤖 Thinking..."):
-            memory_snapshot = copy.deepcopy(st.session_state.memory)
+        memory_snapshot = copy.deepcopy(st.session_state.memory)
 
-            print("MEMORY SNAPSHOT SENT:", memory_snapshot)
+        # 🔥 NEW: extract last valid profile from memory
+        last_profile = {}
 
-            result = run_workflow({
-            "query": q,
-            "memory": memory_snapshot
-            })
+        for m in reversed(st.session_state.memory):
+            p = m.get("profile")
+
+
+            # ✅ allow profile even if partial
+            if p and isinstance(p, dict) and any(v for v in p.values()):
+                last_profile = p
+                break
+
+        last_stage = None
+        for m in reversed(st.session_state.memory):
+            if m.get("stage"):
+                last_stage = m["stage"]
+                break
+
+        result = run_workflow({
+        "query": q,
+        "memory": memory_snapshot,
+        "profile": last_profile,   # ✅ THIS IS THE FIX
+        "stage": last_stage 
+        })
 
         answer = result.get("answer")
 
@@ -87,47 +170,15 @@ def render_chat_tab():
         st.session_state.memory[-1]["assistant"] = answer
         st.session_state.memory[-1]["agent"] = agent
         st.session_state.memory[-1]["animated"] = False
-
-        print("UPDATED MEMORY:", st.session_state.memory)
-
+        st.session_state.memory[-1]["trace"] = result.get("trace", [])
+        st.session_state.memory[-1]["profile"] = result.get("profile", {})
+        st.session_state.memory[-1]["stage"] = result.get("stage")
         st.session_state.pending_query = None
         st.rerun()
         
-    # -------------------------------
-    # Chat history
-    # -------------------------------
-    display_memory = st.session_state.memory[-20:]  # only UI limit
 
-    for i, m in enumerate(display_memory):
 
-        # User
-        with st.chat_message("user"):
-            st.write(m["user"])
-
-        # Assistant
-        if m["assistant"] is not None:
-            with st.chat_message("assistant"):
-
-                # 🔥 ONLY animate last message
-                if not m.get("animated", False):
-                    placeholder = st.empty()
-                    full_text = ""
-
-                    for char in m["assistant"]:
-                        full_text += char
-                        placeholder.markdown(full_text)
-                        time.sleep(0.002)
-                    m["animated"] = True   # 👈 ADD THIS LINE
-                else:
-                    st.write(m["assistant"])
-
-                if m.get("agent"):
-                    st.caption(f"🧠 {m['agent']}")
-    # -------------------------------
-    # Chat input (NO extra spacing)
-    # -------------------------------
-    user_input = st.chat_input("Ask your financial question...")
-
+    
     if user_input:
 
         # ALWAYS append fresh user input

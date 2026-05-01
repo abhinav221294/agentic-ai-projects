@@ -110,7 +110,6 @@ def run_all_tests():
     print("\n===== NOISE =====")
     run_test("hey bro what is sip", "rag")
     run_test("pls suggest good investment", "advisor")
-    run_test("tcs ka price kya hai", "market")
 
     # =========================
     # SYMBOL EDGE

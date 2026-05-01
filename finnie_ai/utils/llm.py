@@ -1,8 +1,8 @@
 from langchain_openai import ChatOpenAI
 
-def get_llm(temperature=0.2, max_tokens=500):
+def get_llm(model="gpt-4o-mini", temperature=0.2, max_tokens=500):
     return ChatOpenAI(
-        model="gpt-4o-mini",
+        model=model,
         temperature=temperature,
         max_tokens=max_tokens
     )

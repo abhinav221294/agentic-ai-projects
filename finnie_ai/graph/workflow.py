@@ -75,12 +75,11 @@ def __build_workflow():
     # ROUTING LOGIC (FINAL)
     # -------------------------
     def __route_decision(state: AgentState):
-        decision = None
+        decision = "fallback_agent"
         category = state.get("category", "none")
         complexity = state.get("complexity", "simple")
         confidence = state.get("confidence", 1.0)
         query = state.get("query", "")
-        print(f"[ROUTER] category={category}, complexity={complexity}, confidence={confidence}, query={query}")        
         if not isinstance(category, str):
             decision = "fallback_agent"
 
@@ -113,16 +112,10 @@ def __build_workflow():
         elif  category == "rag":
             decision = "rag_agent"
 
-        if not decision:
-            decision = "fallback_agent"
-
-        print(f"[ROUTE → NODE] {decision} | category={category}")
-
         state.setdefault("trace", []).append({
-        "step": "router_decision",
-        "category": category,
-        "decision": decision
-        })
+         "agent": "router_agent",
+        "action": "route",
+        "decision": decision})
 
         return decision
 
@@ -183,10 +176,12 @@ def run_workflow(state: dict):
         "trace": state.get("trace", [])}
 
     return {
-        "answer": result.get("answer"),
-        "agent": result.get("agent"),
-        "trace": result.get("trace", []),
-        "tools_used": result.get("tools_used", []),
-        "execution_time": state.get("execution_time"),
-        "confidence": result.get("confidence")
+    "answer": result.get("answer"),
+    "agent": result.get("agent"),
+    "trace": result.get("trace", []),
+    "tools_used": result.get("tools_used", []),
+    "execution_time": state.get("execution_time"),
+    "confidence": result.get("confidence"),
+    "profile": result.get("profile", {}),   # 🔥 THIS FIXES EVERYTHING
+    "stage": result.get("stage")
     }

@@ -1,4 +1,4 @@
-from typing import TypedDict, Optional, Dict, List, Union
+from typing import TypedDict, Optional, Dict, List, Union, Literal
 
 class AgentState(TypedDict, total=False):
     query: str
@@ -17,3 +17,9 @@ class AgentState(TypedDict, total=False):
     answer_source: str
     query_type: str
     decision_source: str
+    stage: Optional[Literal[
+    "collect_profile",
+    "advice",
+    "suggestion",
+    "execution"]]
+    selected_funds: List[str]

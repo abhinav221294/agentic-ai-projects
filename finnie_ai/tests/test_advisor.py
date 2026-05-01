@@ -11,12 +11,14 @@ def run_test(query, memory=None):
 
     result = router_agent(state)
     actual = result.get("category")
+    stage = result.get("stage")  # ✅ NEW
 
     status = "✅ PASS" if actual == "advisor" else "❌ FAIL"
 
     print(status)
     print(f"Query: {query}")
     print(f"Category: {actual} (expected: advisor)")
+    print(f"Stage: {stage}")  # ✅ NEW
     print("-" * 60)
 
     results.append(actual)
@@ -132,6 +134,61 @@ def run_all_tests():
     run_test("Explain inflation and suggest investment")
     run_test("Gold vs mutual fund vs FD what should I choose?")
     run_test("Given current market conditions what should be my strategy?")
+
+    # =========================
+    # ✅ NEW SECTION (ADVANCED)
+    # =========================
+    print("\n===== ADVANCED ADVISOR =====")
+
+    run_test("my risk is low goal is income investment is sip and I have 40000")
+    run_test("I want medium risk growth SIP with 25000")
+    run_test("high risk long term growth with sip 50000")
+
+    run_test("I have 100000 where should I invest lump sum")
+    run_test("low risk income lump sum investment 200000")
+
+    run_test("I have 50000 to invest what should I do")
+    run_test("I can invest 20000 monthly what is best option")
+
+    run_test("I want low risk but high returns where should I invest")
+    run_test("safe investment but maximum growth needed")
+
+    run_test("suggest funds")
+    run_test("recommend funds for sip")
+    run_test("which fund should I choose")
+
+    # =========================
+    # ✅ NEW: EXECUTION WITH MEMORY
+    # =========================
+    print("\n===== EXECUTION WITH MEMORY =====")
+
+    mem_suggestion = [
+        {
+            "user": "please suggest",
+            "assistant": "📊 Suggested funds:\nHDFC Corporate Bond Fund\nICICI Prudential Equity Savings Fund",
+            "stage": "suggestion"
+        }
+    ]
+
+    run_test("yes", memory=mem_suggestion)
+    run_test("go ahead", memory=mem_suggestion)
+    run_test("start investment", memory=mem_suggestion)
+
+    # Full realistic flow memory
+    mem_full = [
+        {
+            "user": "my risk is low goal is income investment is sip",
+            "assistant": "advice response",
+            "stage": "advice"
+        },
+        {
+            "user": "please suggest",
+            "assistant": "📊 Suggested funds...",
+            "stage": "suggestion"
+        }
+    ]
+
+    run_test("yes", memory=mem_full)
 
 
 # =========================
