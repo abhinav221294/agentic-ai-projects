@@ -48,9 +48,7 @@ Router Agent (Core Brain)
    ↓
 Final Response
 ```
-<p align="center">
-  <img src="assets/agent_workflow.png" alt="Finnie AI Architecture" width="700"/>
-</p>
+![Finnie AI Architecture](agent_workflow.png)
 
 ### 🔍 Router Logic
 
