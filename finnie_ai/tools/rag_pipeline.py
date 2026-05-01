@@ -218,10 +218,8 @@ class RAGPipeline:
                 continue
 
             seen_sources.add(file_name)
-            
-            confidence = round(1 - score, 3)
+    
            
-
             # Format output
             formatted_results.append({
             "content": doc.page_content,

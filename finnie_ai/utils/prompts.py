@@ -234,95 +234,115 @@ market / risk / advisor / news / rag / none
 Do NOT answer.
 
 -------------------------
-INTENT DEFINITIONS
+REASONING INSTRUCTION (VERY IMPORTANT)
 -------------------------
 
-advisor → user wants action, recommendation, or decision  
-rag → user wants explanation, definition, or learning  
-risk → user is evaluating safety (not asking what to do)  
-market → price/value queries  
-news → latest updates  
-none → non-finance  
+You MUST follow the decision process step-by-step.
+
+Do NOT classify based on keywords alone.
+
+First determine:
+- Does the user need a decision/action?
+- Or are they only learning?
+
+Only after reasoning, choose the category.
 
 -------------------------
-INTENT PRIORITY (STRICT)
+DECISION PROCESS (MANDATORY)
 -------------------------
 
-If multiple intents appear, follow this order:
+Follow these steps in order:
 
-1. none  
-2. advisor  
-3. rag  
-4. risk  
-5. market  
-6. news  
+STEP 1 — Does the user need a decision, recommendation, or action?
 
--------------------------
-KEY RULES
--------------------------
+If the user is asking ANY evaluation, judgment, or what to do:
+→ advisor (STOP)
 
-- Decision or recommendation → advisor  
-  ("should I", "best", "option", "what to do")
+This includes:
+- "is it good"
+- "should I"
+- "worth it"
+- "safe option"
+- "what should I do"
+- "not getting good returns"
+- "portfolio not performing"
 
-- Explanation or learning → rag  
-  ("what is", "explain", "meaning")
+STEP 2 — Does the query mix multiple intents?
+If ANY decision/action is present → advisor (STOP)
 
-- Safety check ONLY → risk  
-  ("is it safe", "is it risky")
+Examples:
+- what is SIP and should I invest → advisor
+- crypto risky but should I invest → advisor
+- explain and suggest → advisor
 
-- "safe option" → advisor (decision overrides risk)
+STEP 3 — Is it purely learning?
 
-- "risk" alone does NOT mean risk  
-  → learning = rag  
-  → safety evaluation = risk  
+If ONLY explanation → rag
 
-- Non-finance → none  
+Examples:
+- what is SIP
+- explain mutual funds
 
-# --- ADD THIS PART BELOW ---
+IMPORTANT:
+- Comparison queries WITHOUT asking what to choose → rag
 
-- If query contains BOTH learning + action → advisor  
-  ("what is SIP and how to invest")
+Examples:
+- mutual fund vs FD
+- SIP vs lump sum
 
-- If user describes a problem → advisor  
-  ("not getting good returns", "portfolio not performing")
+Examples:
+- what is SIP
+- explain mutual funds
 
-- Short vague decision queries → advisor  
-  ("is it good?", "should I?", "worth it?")
+STEP 4 — Is the user ONLY asking about safety (no decision)?
 
-- Comparison queries ONLY → rag  
-  ("mutual fund vs FD", "SIP vs lump sum")
+If the query is a clear question about safety:
+→ risk
 
-- Safety phrasing → risk  
-  ("safe?", "risky?", "is it safe?")
-
-- Follow-up vague queries → advisor
-  ("is it good?", "should I?", "worth it?")
-  especially if context exists
-
-- Short ambiguous safety queries → risk  
-  ("crypto risky", "gold safe")
-
-- Vague follow-up queries → advisor  
-  ("is it good", "should I", "worth it")
-  
--------------------------
-EXAMPLES
--------------------------
-
-rag:
-- what is sip
-- risk?
-- risk of mutual funds explained
-
-advisor:
-- safe option
-- should I invest
-
-risk:
+Examples:
 - is crypto risky
+- is gold safe
 
-none:
+IMPORTANT:
+- Short or unclear statements like "crypto risky" should be treated as safety evaluation → risk
+- Do NOT assume decision unless explicitly asked
+- Single-word queries like "risk", "NAV", "SIP" → rag
+
+BUT if they also ask what to do → advisor
+
+STEP 5 — Is it pure information (price/news)?
+If ONLY information → market or news
+
+STEP 6 — Is it clearly non-financial?
+If the query is about sports, movies, weather, or general topics → none
+
+Examples:
 - what is cricket
+- explain football
+- weather today
+
+-------------------------
+SHORT QUERY HANDLING
+-------------------------
+
+For very short or vague queries (1–3 words):
+
+- If it implies a decision or evaluation → advisor  
+  ("is it good", "worth it", "safe option")
+
+- If it is a single concept or term → rag  
+  ("SIP", "risk", "NAV")
+
+- If unclear → advisor
+
+-------------------------
+FINAL CHECK
+-------------------------
+
+Before answering, ask:
+"Is the user trying to decide something?"
+
+If YES → advisor
 
 -------------------------
 OUTPUT
