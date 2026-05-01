@@ -4,7 +4,11 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 #from langchain.document_loaders import DirectoryLoader, TextLoader
 #from langchain_community.vectorstores import Chroma
 from langchain_chroma import Chroma
-from langchain_community.document_loaders import DirectoryLoader, TextLoader
+from langchain_community.document_loaders import (
+    DirectoryLoader,
+    TextLoader,
+    PyPDFLoader
+)
 from langchain_openai import OpenAIEmbeddings
 #from tiktoken import encoding_for_model
 import tiktoken
@@ -46,64 +50,40 @@ class RAGPipeline:
         self.retriever = self.vectorstore.as_retriever(search_kwargs={"k": 3})
         
 
-    def __load_documents(self) -> list:
-        """
-        Loads all .txt files from the specified directory.
+    def __load_documents(self):
 
-        Two approaches:
-        1. Manual loading (commented out) → full control over metadata
-        2. DirectoryLoader (used here) → automated, scalable loading
+        all_docs = []
 
-        Returns:
-            list[Document]: List of LangChain Document objects
-        """
-
-        # -------------------------------
-        # Manual Loading (Optional)
-        # -------------------------------
-        # This approach gives full control over:
-        # - metadata
-        # - preprocessing
-        # - custom tagging
-
-        # for file in os.listdir(self.folder_path):
-        #     if file.endswith(".txt"):
-        #         file_path = os.path.join(self.folder_path, file)
-        #         with open(file_path, "r", encoding="utf-8") as f:
-        #             text = f.read()
-        #             self.documents.append(
-        #                 Document(
-        #                     page_content=text,
-        #                     metadata={"source": file_path}
-        #                 )
-        #             )
-
-
-        
-
-        # -------------------------------
-        # Automated Loading (Recommended)
-        # -------------------------------
-        # DirectoryLoader:
-        # - Scans folder
-        # - Filters .txt files
-        # - Uses TextLoader to read content
-        # - Converts each file into Document object
-        # - Adds metadata (source path)
-
-        loader = DirectoryLoader(
-            path=self.folder_path,        # Folder path containing documents
-            glob="*.txt",                 # Load only .txt files
-            loader_cls=TextLoader,        # Use TextLoader for reading files
-            show_progress=True,           # Display progress bar
-            use_multithreading=True       # Load files in parallel for speed
+        # ---------------- TXT ----------------
+        txt_loader = DirectoryLoader(
+        path=self.folder_path,
+        glob="*.txt",
+        loader_cls=TextLoader,
+        show_progress=True,
+        use_multithreading=True
         )
+        all_docs.extend(txt_loader.load())
 
-        # Execute loading process
-        self.documents = loader.load()
+        # ---------------- PDF ----------------
+        pdf_loader = DirectoryLoader(
+        path=self.folder_path,
+        glob="*.pdf",
+        loader_cls=PyPDFLoader,
+        show_progress=True,
+        use_multithreading=True
+        )
+        all_docs.extend(pdf_loader.load())
 
-        return self.documents
+        # ✅ Add metadata (VERY IMPORTANT)
+        for doc in all_docs:
+            source = doc.metadata.get("source", "")
+        
+            if source.endswith(".pdf"):
+                doc.metadata["file_type"] = "pdf"
+            elif source.endswith(".txt"):
+                doc.metadata["file_type"] = "txt"
 
+        return all_docs
 
     def __split_documents(self, docs: list) -> list:
         """
@@ -135,8 +115,8 @@ class RAGPipeline:
         #   paragraphs → lines → words → characters
         # - Maintains semantic structure as much as possible
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=200,                 # Max tokens per chunk
-            chunk_overlap=50,               # Overlap to preserve context
+            chunk_size=800,                 # Max tokens per chunk
+            chunk_overlap=150,               # Overlap to preserve context
             length_function=_token_length,   # Use token-based length
             separators=["\n\n", "\n", ".", " ", ""]  # Priority splitting strategy
         )
@@ -244,11 +224,10 @@ class RAGPipeline:
 
             # Format output
             formatted_results.append({
-                "content": doc.page_content,   # Retrieved text chunk
-                "source_file_name": file_name,           # Source file name
-                "source":doc.metadata.get("source","unknown"),  # (optional full path)
-                "score": round(score, 3),       # Relevance score (rounded)
-                "confidence": confidence       # Confidence
+            "content": doc.page_content,
+            "source_file_name": file_name,
+            "file_type": doc.metadata.get("file_type", "unknown"),
+            "score": round(score, 3),
             })
 
         return formatted_results

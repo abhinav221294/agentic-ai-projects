@@ -5,6 +5,7 @@ from agents.news_agent import news_agent
 from agents.rag_agent import rag_agent
 import re
 import time
+from difflib import get_close_matches
 
 # -------------------------
 # CENTRAL RESPONSE SETTER
@@ -29,6 +30,60 @@ import time
 #
 #    return state
 #
+
+# Allocation mapping
+ALLOCATION_MAP = {
+
+    # LOW RISK
+    ("low", "income"): {
+    "equity": 30,
+    "debt": 50,
+    "gold": 20},
+    
+
+    ("low", "growth"): {
+    "equity": 30,
+    "debt": 50,
+    "gold": 20
+    }, 
+ 
+    # MEDIUM
+    ("medium", "income"): {
+    "equity": 40,
+    "debt": 40,
+    "gold": 20},
+
+    ("medium", "growth"):
+     {"equity": 60,
+    "debt": 25,
+    "gold": 15},
+
+    # HIGH RISK
+    ("high", "income"): {
+    "equity": 70,
+    "debt": 20,
+    "gold": 10},
+
+    ("high", "growth"): {
+    "equity": 80,
+    "debt": 15,
+    "gold": 5}
+    }
+
+
+ASSET_MAP = {
+    "equity": ["equity", "stocks", "shares", "mutual fund", "mutual funds", "mf"],
+    "debt": ["debt", "bonds", "fixed income"],
+    "gold": ["gold"],
+    "crypto": ["crypto", "bitcoin", "ethereum"],
+    "real_estate": ["real estate", "property"],
+}
+
+MAX_LIMITS = {
+    "crypto": 20,
+    "gold": 30
+}
+
 
 def _set(state, start, answer, agent, confidence, decision_source, answer_source, trace_type, extra=None, add_trace=True):
     state["answer"] = answer
@@ -71,34 +126,112 @@ def calculate_lumpsum_future_value(principal, annual_return=10, years=10):
     return int(fv)
 
 
-# Allocation mapping
-ALLOCATION_MAP = {
+def extract_user_allocation(query):
+    allocation = {}
+    unknown_assets = []
 
-    # LOW RISK
-    ("low", "income"): (30, 50, 20),
-    ("low", "growth"): (40, 40, 20),
+    query = query.lower()
 
-    # MEDIUM
-    ("medium", "income"): (40, 40, 20),
-    ("medium", "growth"): (60, 25, 15),
+    # ✅ support both formats
+    pattern1 = r"(\d+)%?\s*([a-zA-Z ]+)"   # 100 crypto / 100% crypto
+    pattern2 = r"([a-zA-Z ]+)\s*(\d+)%?"   # crypto 100 / crypto 100%
 
-    # HIGH RISK
-    ("high", "income"): (70, 20, 10),
-    ("high", "growth"): (80, 15, 5),
-}
+    matches1 = re.findall(pattern1, query)
+    matches2 = re.findall(pattern2, query)
 
+    def map_asset(asset_raw, percent):
+        asset_raw = asset_raw.strip().lower()
+        percent = int(percent)
+
+        for canonical, aliases in ASSET_MAP.items():
+            all_terms = aliases + [canonical]
+
+            match = get_close_matches(asset_raw, all_terms, n=1, cutoff=0.7)
+
+            if match:
+                allocation[canonical] = allocation.get(canonical, 0) + percent
+                return True
+        return False
+
+    # format: 100 crypto
+    for percent, asset in matches1:
+        if not map_asset(asset, percent):
+            unknown_assets.append(asset.strip())
+
+    # format: crypto 100
+    for asset, percent in matches2:
+        if not map_asset(asset, percent):
+            unknown_assets.append(asset.strip())
+
+    # remove duplicates
+    unknown_assets = list(set(unknown_assets))
+
+    print("QUERY: ", query)
+    print("MATCHES 1: ", matches1)
+    print("MATCHES 2: ", matches2)
+    print("USER_ALLOC: ", allocation)
+
+    return allocation, unknown_assets
+
+
+def merge_allocation(user_alloc, default_alloc):
+    result = {}
+
+    total_user = sum(user_alloc.values())
+    remaining = 100 - total_user
+
+    # ❌ invalid case
+    if remaining < 0:
+        return None
+
+    # assets not provided by user
+    remaining_assets = [k for k in default_alloc if k not in user_alloc]
+
+    default_remaining_sum = sum(default_alloc[k] for k in remaining_assets)
+
+    # ⚠️ edge case: user defined everything
+    if default_remaining_sum == 0:
+        return user_alloc
+
+    # distribute remaining %
+    for asset in default_alloc:
+        if asset in user_alloc:
+            result[asset] = user_alloc[asset]
+        else:
+            weight = default_alloc[asset] / default_remaining_sum
+            result[asset] = round(weight * remaining)
+
+    # include extra assets (like crypto)
+    for asset in user_alloc:
+        if asset not in result:
+            result[asset] = user_alloc[asset]
+
+    # ✅ normalize to 100
+    total = sum(result.values())
+
+    if total != 100:
+        diff = 100 - total
+
+        for k in result:
+            if k not in MAX_LIMITS:
+                result[k] += diff
+                break
+
+    return result
 
 
 def advisor_agent(state: AgentState) -> AgentState:
     start = time.time()
-
+    
     profile = (state.get("profile") or {}).copy()
     memory = state.get("memory", [])
     #last_msg = memory[-1] if memory else {}
     #raw_query = last_msg.get("user", state.get("query", "")).strip()
     raw_query = state.get("query", "").strip()
-    query = re.sub(r"[^\w\s]", " ", raw_query).lower().strip()
-    amount_match = re.search(r"\b\d{4,7}\b", query)
+    query = re.sub(r"[^\w\s%]", " ", raw_query).lower().strip()
+    amount_match = re.search(r"\b\d{3,7}\b", query)
+    user_alloc, unknown_assets = extract_user_allocation(query)
+
 
     # -------------------------
     # STAGE DETECTION (CRITICAL)
@@ -114,40 +247,6 @@ def advisor_agent(state: AgentState) -> AgentState:
     # 🔥 ALWAYS get last VALID profile
     # 🔥 ALWAYS fetch last valid profile
 
-
-    # Start with existing profile (if any)
-    # -------------------------
-    # EXTRACT RISK
-    # -------------------------
-    if "low" in query:
-        profile["risk"] = "low"
-    elif "medium" in query:
-        profile["risk"] = "medium"
-    elif "high" in query:
-        profile["risk"] = "high"
-
-    # -------------------------
-    # EXTRACT GOAL
-    # -------------------------
-    if "income" in query:
-        profile["goal"] = "income"
-    elif "growth" in query:
-        profile["goal"] = "growth"
-
-    # -------------------------
-    # EXTRACT INVESTMENT TYPE
-    # -------------------------
-    if "sip" in query:
-        profile["investment_type"] = "sip"
-    elif "lump sum" in query:
-        profile["investment_type"] = "lump sum"
-
-    #    🔥 SAVE BACK
-    #state["profile"] = profile
-
-    #print("Initial profile: ", profile)
-
-
     if memory:
         for m in reversed(memory):
             last_profile = m.get("profile", {})
@@ -155,7 +254,6 @@ def advisor_agent(state: AgentState) -> AgentState:
                 for k, v in last_profile.items():
                     if not profile.get(k):
                         profile[k] = v
- 
 
     if not query.strip():
        return _set(
@@ -202,7 +300,7 @@ def advisor_agent(state: AgentState) -> AgentState:
 
     if "sip" in query:
         profile["investment_type"] = "sip"
-    elif "lump sum" in query:
+    elif "lump sum" in query or "lumpsum" in query:
         profile["investment_type"] = "lump sum"
 
     state["profile"] = profile
@@ -251,10 +349,22 @@ def advisor_agent(state: AgentState) -> AgentState:
     if not profile.get("investment_type"):
         missing.append("investment type (SIP / lump sum)")
 
-    # -------------------------
-    # NO INFO → ask everything
-    # -------------------------
-    if missing:
+
+    if not user_alloc and unknown_assets:
+        return _set(
+                state, start,
+               f"I couldn't recognize: {', '.join(unknown_assets)}.\n"
+                "Try assets like equity, debt, gold, crypto.\n"
+                "Or did you mean something else?",
+                "advisor_agent",
+                0.8,
+                "validation",
+                "advisor",
+                "invalid_asset"
+                )
+
+    # ✅ If user gave NO useful info → ask
+    if len(missing) >= 2 and not user_alloc:
         followup = "\n\nTo refine this further, you can also share:\n"
         followup += "\n".join([f"- {m}" for m in missing])
 
@@ -265,9 +375,6 @@ Got it — I can help with that.
 
 Can you share that?
 """
-        state["profile"] = profile
-        state["stage"] = "collect_profile"
-
         return _set(
         state, start,
         answer,
@@ -277,6 +384,16 @@ Can you share that?
         "advisor",
         "ask_missing"
     )
+
+    answer = ""
+    if user_alloc and not any([risk, goal, investment]):
+        answer += "\n\n💡 Tip: Share your risk level or goal for more personalized advice."
+
+    # -------------------------
+    # NO INFO → ask everything
+    # -------------------------
+    if user_alloc and not any([profile.get("risk"), profile.get("goal"), profile.get("investment_type")]):
+            pass
 
     
     # -------------------------
@@ -323,10 +440,111 @@ Can you share that?
     # EXECUTION DETECTION (AFTER suggestion)
     # -------------------------
     is_execution = False
-
+    warning_msg = ""
     if last_stage == "suggestion" and not is_decision and not is_profile_update:
         is_execution = True
+    
+    allocation_gap_msg = ""
+    
+    total_user = sum(user_alloc.values()) if user_alloc else 0
+    
 
+
+    default_alloc = ALLOCATION_MAP.get(
+    (risk, goal),
+    {"equity": 40, "debt": 40, "gold": 20}
+    )
+
+    if user_alloc:
+        if total_user > 100:
+            return _set(
+            state, start,
+            "Your allocation exceeds 100%. Please adjust.",
+            "advisor_agent",
+            0.9,
+            "validation",
+            "advisor",
+            "invalid_allocation"
+            )
+        
+        elif total_user == 100:
+            # still allow constraints to rebalance
+            final_alloc = user_alloc.copy()
+
+        else:
+            # ✅ PARTIAL → merge smartly
+            final_alloc = merge_allocation(user_alloc, default_alloc)
+    else:
+        final_alloc = default_alloc
+    
+    # ✅ FINAL ALLOCATION DECIDED → NOW VALIDATE LIMITS
+    
+    # -------------------------
+    # APPLY CAPS
+    # -------------------------
+    for asset, percent in final_alloc.items():
+        if asset in MAX_LIMITS and percent > MAX_LIMITS[asset]:
+            final_alloc[asset] = MAX_LIMITS[asset]
+    # ✅ ADD HERE (right after caps)
+    for asset, percent in user_alloc.items():
+        if asset in MAX_LIMITS and percent > MAX_LIMITS[asset]:
+            warning_msg += f"\n⚠️ {asset.capitalize()} capped at {MAX_LIMITS[asset]}% to reduce risk.\n"
+    # -------------------------
+    # 🔥 ADD THIS BLOCK HERE (REDISTRIBUTION)
+    # -------------------------
+    
+    # -------------------------
+    # NORMALIZE AFTER CAPS (FINAL FIX)
+    # -------------------------
+    total = sum(final_alloc.values())
+    adjustable = []
+    diff = 0
+    if total < 100:
+
+        # -------------------------
+        # CASE 1: FULL user allocation
+        # -------------------------
+        if total_user == 100:
+
+            remaining = 100 - total
+
+            safe_assets = [k for k in default_alloc if k not in MAX_LIMITS]
+
+            if safe_assets:
+                share = remaining // len(safe_assets)
+
+                for k in safe_assets:
+                    final_alloc[k] = final_alloc.get(k, 0) + share
+
+        # -------------------------
+        # CASE 2: PARTIAL user allocation
+        # -------------------------
+        else:
+            diff = 100 - total
+
+            for asset in default_alloc:
+                if asset not in final_alloc:
+                    final_alloc[asset] = 0
+
+            adjustable = [k for k in default_alloc if k not in MAX_LIMITS]
+
+            if not adjustable:
+                adjustable = list(final_alloc.keys())
+
+            share = diff // len(adjustable)
+
+            for k in adjustable:
+                final_alloc[k] += share
+    
+    user_defined_partial = 0 < total_user < 100
+    
+    if user_defined_partial:
+        remaining_assets = [k for k in final_alloc if k not in user_alloc]
+    
+        allocation_gap_msg += "\nRemaining allocation applied to:\n"
+    
+        for asset in remaining_assets:
+            allocation_gap_msg += f"- {asset.capitalize()} → {final_alloc[asset]}%\n"
     
     # -------------------------
     # INVESTMENT AMOUNT
@@ -351,15 +569,13 @@ Can you share that?
             ("Gold / Liquid", "diversification")
             ]
         
-        alloc_values = ALLOCATION_MAP.get((risk, goal), (40, 40, 20))
         amount_block += "\n📊 Suggested split:\n\n"
        
-        for i, percent in enumerate(alloc_values):
+        for asset, percent in final_alloc.items():
             fund_amount = int(amount * percent / 100)
-            name, desc = labels[i]
-
-            amount_block += f"- ₹{fund_amount:,} ({percent}%) → {name} ({desc})\n"
-
+    
+            amount_block += f"- ₹{fund_amount:,} ({percent}%) → {asset.capitalize()}\n"
+    
     if investment == "sip":
         sip_amount = f"₹{amount:,}/month" if amount else "₹5,000/month"
     elif investment == "lump sum":
@@ -523,17 +739,6 @@ Can you share that?
 
             projection_block += f"- ₹{amount:,} → ₹{fv_10:,} in 10 years (10% return)\n"
             projection_block += f"- ₹{amount:,} → ₹{fv_15:,} in 15 years (10% return)\n"
-        
-        alloc_values = ALLOCATION_MAP.get((risk, goal), (40, 40, 20))
-
-        execution_block = ""
-
-        labels = ["Equity", "Debt", "Gold"]
-
-        allocation_hint = "\n".join([
-        f"- {alloc_values[i]}% {labels[i]}"
-        for i in range(3)
-        ])
 
         # ✅ ONLY read from state
         selected_funds = state.get("selected_funds", [])
@@ -549,7 +754,9 @@ Can you share that?
 
         if selected_funds and amount:
 
-            for i, fund in enumerate(selected_funds[:3]):
+            alloc_values = list(final_alloc.values())
+
+            for i, fund in enumerate(selected_funds[:len(alloc_values)]):
                 percent = alloc_values[i]
                 fund_amount = int(amount * percent / 100)
 
@@ -590,8 +797,6 @@ Can you share that?
     needs_market = any(w in query for w in ["price", "market"])
     needs_news = any(w in query for w in ["news", "latest"])
 
-
-    
 
     # -------------------------
     # TOOL ORCHESTRATION (FIXED)
@@ -851,19 +1056,20 @@ Can you share that?
         # -------------------------
         labels = ["Equity", "Debt", "Gold"]
 
-        alloc_values = ALLOCATION_MAP.get((risk, goal), (40, 40, 20))
-
+        
         allocation_hint = "\n".join([
-        f"- {alloc_values[i]}% {labels[i]}"
-            for i in range(3)
-        ])
+            f"- {v}% {k.capitalize()}"
+            for k, v in final_alloc.items()
+            ])
 
         if advice_lines:
                 advice_text = "\n".join(f"- {line}" for line in advice_lines)
         else:
                 advice_text = "- Maintain diversification across asset classes"
-
-        answer = ("Got it — based on what you've shared:\n\n"
+        warning_msg = warning_msg.strip() 
+        answer = (f"{warning_msg}\n"
+    f"{allocation_gap_msg}\n\n"
+    "Got it — based on what you've shared:\n\n"
     f"{profile_section}"
     "---\n\n"
     "Here’s what this means for you:\n\n"
@@ -879,8 +1085,7 @@ Can you share that?
     f"{execution_block if execution_block else ''}\n\n"
     f"{projection_block if projection_block else ''}\n\n"
     "---\n\n"
-    f"{ending_line}"
-    )
+    f"{ending_line}")
         
         profile = {k: v for k, v in profile.items() if v}
         

@@ -3,11 +3,34 @@ from utils.llm import get_llm
 import re
 from utils.prompts import ROUTER_PROMPT
 from dotenv import load_dotenv
-
+from difflib import get_close_matches
 load_dotenv()
+
+ASSET_MAP = {
+    "equity": ["equity", "stocks", "shares"],
+    "debt": ["debt", "bonds", "fixed income"],
+    "gold": ["gold"],
+    "crypto": ["crypto", "bitcoin", "ethereum"],
+    "real_estate": ["real estate", "property"],
+}
 
 VALID_CATEGORIES = {"market", "risk", "advisor", "news", "rag", "none"}
 
+FINANCE_KEYWORDS = [
+    "invest", "investment", "sip", "lump", "equity",
+    "debt", "gold", "crypto", "fund", "portfolio",
+    "stock", "returns", "bonds"
+]
+
+def is_finance_related(query: str) -> bool:
+    words = query.lower().split()
+
+    for word in words:
+        match = get_close_matches(word, FINANCE_KEYWORDS, n=1, cutoff=0.75)
+        if match:
+            return True
+
+    return False
 
 # -------------------------
 # CENTRAL SETTER
@@ -252,10 +275,30 @@ def router_agent(state: AgentState) -> AgentState:
         if memory and memory[-1].get("agent") == "advisor_agent":
             return _set(state, "advisor", 0.96, "followup", "amount_detected")
 
-    
+    # -------------------------
+    # ALLOCATION DETECTION (FIXED)
+    # -------------------------
+
+    pattern1 = r"\d+%\s*([a-zA-Z ]+)"        # 100% crypto
+    pattern2 = r"([a-zA-Z ]+)\s*\d+%"        # crypto 100%
+
+    match1 = re.search(pattern1, query.lower())
+    match2 = re.search(pattern2, query.lower())
+
+    match = match1 or match2
+    if match:
+        asset_raw = match.group(1).strip().lower()
+
+        valid_assets = [a for aliases in ASSET_MAP.values() for a in aliases]
+        match_asset = get_close_matches(asset_raw, valid_assets, n=1, cutoff=0.7)
+
+        if match_asset or is_finance_related(query):
+            return _set(state, "advisor", 0.95, "rule", "allocation_detected")
+
     # -------------------------
     # STEP 1: PRIMARY CLASSIFICATION
     # -------------------------
+
     first = classify_agent(state)
 
     if not first:
@@ -288,3 +331,4 @@ def router_agent(state: AgentState) -> AgentState:
         "agent",
         first["reason"]
     )
+    
