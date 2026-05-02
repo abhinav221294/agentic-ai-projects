@@ -25,7 +25,6 @@ def _set(state, category, confidence, source, reason=None):
 
     return state
 
-
 # -------------------------
 # BUILD CONTEXT (IMPORTANT)
 # -------------------------
@@ -38,7 +37,6 @@ def build_context(state):
         f"""
 User: {m.get('query')}
 Assistant: {m.get('assistant')}
-Stage: {m.get('stage')}
 """
         for m in memory[-3:]
     ])
@@ -53,22 +51,73 @@ Context:
 Recent Conversation:
 {history}
 
+Topic: Continue the same financial topic unless user explicitly changes it.
+
 IMPORTANT:
-- Use context to understand intent
-- Short replies may be continuation
-- Do NOT rely on keywords only
+- Continue the same topic unless user clearly changes it
+- If user asks a vague follow-up → infer from previous conversation
+- Use previous assistant response to understand intent
+- Do NOT rely on keywords only"""
+
+# -------------------------
+# LLM FOLLOW-UP ROUTING (FIX)
+# -------------------------
+from utils.llm import get_llm
+
+llm = get_llm(temperature=0)
+
+def is_followup_llm(query, memory):
+    history = "\n".join([
+        f"User: {m.get('query')}\nAssistant: {m.get('assistant')}"
+        for m in memory[-2:]
+    ])
+
+    prompt = f"""
+Is the user's latest query a follow-up to the previous conversation?
+
+Conversation:
+{history}
+
+New query:
+{query}
+
+Answer only YES or NO.
 """
 
+    try:
+        res = llm.invoke(prompt)
+        return "yes" in res.content.lower()
+    except:
+        return False
 
 # -------------------------
 # PURE LLM ROUTER
 # -------------------------
 def router_agent(state: AgentState) -> AgentState:
+    # -------------------------
+    # LLM FOLLOW-UP DETECTION (NO KEYWORDS)
+    # -------------------------
+    memory = state.get("memory", [])
+    last_agent = memory[-1].get("agent") if memory else None
+
     llm = get_llm(model="gpt-4o-mini", temperature=0)
 
     query = state.get("query", "")
 
     context = build_context(state)
+    is_followup = is_followup_llm(query, memory)
+
+    # -------------------------
+    # FOLLOW-UP ROUTING
+    # -------------------------
+    if is_followup_llm(query, memory) and last_agent:
+        return _set(
+        state,
+        last_agent.replace("_agent", ""),
+        0.95,
+        "llm_followup",
+        "continue_context"
+        )
 
     prompt = f"""
 {context}
@@ -79,18 +128,16 @@ def router_agent(state: AgentState) -> AgentState:
     res = llm.invoke(prompt)
 
     # Clean output
-    category = res.content.strip().lower()
-    category = category.replace(".", "").replace(",", "")
-    category = category.split()[0]
-
+    category = res.content.strip().lower().split()[0]
+    # hard safety clamp
+    
     if category not in VALID_CATEGORIES:
-        # Even fallback is LLM-driven philosophy → soft default
         category = "advisor"
 
     return _set(
-        state,
-        category,
-        0.9,
-        "pure_llm",
-        "context_reasoned"
+    state,
+    category,
+    0.9,
+    "pure_llm",
+    f"llm_output={res.content.strip()}"
     )

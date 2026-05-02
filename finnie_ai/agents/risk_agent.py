@@ -10,7 +10,7 @@ def _set(state, start, answer, confidence, extra=None):
     state["answer"] = answer
     state["agent"] = "risk_agent"
     state["confidence"] = confidence
-    state["decision_source"] = "rule"
+    state["decision_source"] = "rule"   # ✅ this is fine
     state["answer_source"] = "risk_logic"
     state["execution_time"] = round(time.time() - start, 2)
 
@@ -23,7 +23,10 @@ def _set(state, start, answer, confidence, extra=None):
 def risk_agent(state: AgentState) -> AgentState:
     start = time.time()
 
-    state.setdefault("trace", []).append("risk_agent")
+    state.setdefault("trace", []).append({
+    "agent": "risk_agent",
+    "action": "analyze_risk"
+        })
 
     # -------------------------
     # Step 1: Normalize query
@@ -53,7 +56,7 @@ def risk_agent(state: AgentState) -> AgentState:
         any(p in query for p in FOLLOW_UP_PHRASES)
     )
 
-    is_follow_up = memory and is_followup_signal
+    is_follow_up = bool(memory) and is_followup_signal
 
     state["query_type"] = "follow_up" if is_follow_up else "fresh"
 
@@ -67,29 +70,26 @@ def risk_agent(state: AgentState) -> AgentState:
                 "Please ask a clear question about risk.",
                 0.5
             )
-
     # -------------------------
     # Step 3: Get last answer
     # -------------------------
-    last_answer = next(
-        (m.get("assistant", "") for m in reversed(memory) if m.get("assistant")),
-        ""
-    )
-    last_answer_lower = last_answer.lower()
+
 
     # -------------------------
     # Step 4: Handle follow-up
     # -------------------------
-    if is_follow_up and "risk level" in last_answer_lower:
-
-        if "high" in last_answer_lower:
+    if is_follow_up and state.get("risk_level"):
+        prev_level = state.get("risk_level", "").lower()
+        risk_level = ""
+        
+        if prev_level.startswith("high"):
             risk_level = "High ⚠️"
             explanation = (
                 "Cryptocurrency is risky due to high volatility, rapid price swings, "
                 "regulatory uncertainty, and strong influence of market sentiment."
             )
 
-        elif "low" in last_answer_lower:
+        elif prev_level.startswith("low"):
             risk_level = "Low ✅"
             explanation = (
                 "These investments are considered low risk because they offer stable "
@@ -106,9 +106,13 @@ def risk_agent(state: AgentState) -> AgentState:
         tip = "Tip: Consider your investment horizon and financial goals."
 
         return _set(
-            state, start,
-            f"Risk Level: {risk_level}\n{explanation}\n\n{tip}",
-            0.8
+        state, start,
+        f"Risk Level: {risk_level}\n{explanation}\n\n{tip}",
+        0.8,
+        extra={
+        "risk_level": risk_level,
+        "risk_explanation": explanation
+        }
         )
 
     # -------------------------
@@ -155,5 +159,9 @@ def risk_agent(state: AgentState) -> AgentState:
     return _set(
         state, start,
         f"Risk Level: {risk_level}\n{explanation}\n\n{tip}",
-        0.8
+        0.8,
+        extra={
+        "risk_level": risk_level,
+        "risk_explanation": explanation
+        }
     )

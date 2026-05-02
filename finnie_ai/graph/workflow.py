@@ -161,27 +161,43 @@ def run_workflow(state: dict):
             "investment_type": None
         }
 
+    if "thread_id" not in state:
+        state["thread_id"] = str(uuid.uuid4())
+
     result = app.invoke(
-        state,
-        config={
-            "recursion_limit": 10,
-            "configurable": {
-                "thread_id": str(uuid.uuid4())
+    state,
+    config={
+        "recursion_limit": 10,
+        "configurable": {
+            "thread_id": state["thread_id"]
             }
         }
     )
 
     if not result:
-        return {"answer": "Something went wrong.", "agent": "system",
-        "trace": state.get("trace", [])}
+        return {
+            "answer": "Something went wrong.",
+            "agent": "system",
+            "trace": state.get("trace", [])
+        }
 
+    # 🔥 ADD MEMORY HERE (THIS IS THE SPOT)
+    state.setdefault("memory", []).append({
+        "query": state.get("query"),
+        "assistant": result.get("answer"),
+        "stage": result.get("stage"),
+        "agent": result.get("agent")
+    })
+
+    # ✅ Return response
     return {
-    "answer": result.get("answer"),
-    "agent": result.get("agent"),
-    "trace": result.get("trace", []),
-    "tools_used": result.get("tools_used", []),
-    "execution_time": state.get("execution_time"),
-    "confidence": result.get("confidence"),
-    "profile": result.get("profile", {}),   # 🔥 THIS FIXES EVERYTHING
-    "stage": result.get("stage")
+        "answer": result.get("answer"),
+        "agent": result.get("agent"),
+        "trace": result.get("trace", []),
+        "tools_used": result.get("tools_used", []),
+        "execution_time": state.get("execution_time"),
+        "confidence": result.get("confidence"),
+        "profile": result.get("profile", {}),
+        "stage": result.get("stage"),
+        "memory": state.get("memory", [])   # optional but useful
     }

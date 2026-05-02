@@ -1,16 +1,25 @@
 import streamlit as st
-from graph.workflow import run_workflow
 import time
 import re
 import copy
 
-def render_chat_tab():
+from graph.workflow import run_workflow
 
+
+def render_chat_tab(state):
+
+    if run_workflow is None:
+        st.error("Workflow not initialized properly")
+        return
+    print("LOADING TAB1_CHAT")
     # -------------------------------
     # Init
     # -------------------------------
-    if "memory" not in st.session_state:
-        st.session_state.memory = []
+    #state = st.session_state["agent_state"]
+    state.setdefault("profile", {})
+    state.setdefault("last_intent", None)
+    state.setdefault("stage", None)
+    state.setdefault("memory", [])
 
     if "pending_query" not in st.session_state:
         st.session_state.pending_query = None
@@ -28,14 +37,14 @@ def render_chat_tab():
 
     with col2:
         if st.button("🧹"):
-            st.session_state.memory = []
+            state["memory"]= []
             st.session_state.pending_query = None
             st.rerun()
 
     # -------------------------------
     # Suggestions (first load)
     # -------------------------------
-    if len(st.session_state.memory) == 0 and not st.session_state.pending_query:
+    if len(state["memory"]) == 0 and not st.session_state.pending_query:
 
         st.markdown("### 🧪 Try these:")
 
@@ -52,24 +61,24 @@ def render_chat_tab():
         for i, q_sample in enumerate(sample_queries):
             with cols[i % 3]:
                 if st.button(q_sample, use_container_width=True):
-                    st.session_state.memory.append({
-                                "user": q_sample,
+                    state["memory"].append({
+                                "query": q_sample,
                                 "assistant": None
                     })
-                    st.session_state.current_index = len(st.session_state.memory) - 1
+                    st.session_state.current_index = len(state["memory"]) - 1
                     st.session_state.pending_query = q_sample
                     st.rerun()
 
     # -------------------------------
     # Chat history
     # -------------------------------
-    display_memory = st.session_state.memory[-20:]  # only UI limit
+    display_memory = state["memory"][-20:]  # only UI limit
 
     for i, m in enumerate(display_memory):
 
         # User
         with st.chat_message("user"):
-            st.markdown(m["user"])
+            st.markdown(m["query"])
 
         # Assistant
         if m["assistant"] is not None:
@@ -117,7 +126,7 @@ def render_chat_tab():
                         trace_text = " → ".join(trace_steps)
                         st.caption(f"🧠 Flow: {trace_text}")
 
-    if st.session_state.pending_query and st.session_state.memory[-1]["assistant"] is None:
+    if st.session_state.pending_query and state["memory"] and state["memory"][-1]["assistant"] is None:
         with st.chat_message("assistant"):
             st.markdown("🤖 Thinking...")
     # -------------------------------
@@ -132,12 +141,12 @@ def render_chat_tab():
 
         q = st.session_state.pending_query  
 
-        memory_snapshot = copy.deepcopy(st.session_state.memory)
+        memory_snapshot = copy.deepcopy(state["memory"])
 
         # 🔥 NEW: extract last valid profile from memory
         last_profile = {}
 
-        for m in reversed(st.session_state.memory):
+        for m in reversed(state["memory"]):
             p = m.get("profile")
 
 
@@ -147,7 +156,7 @@ def render_chat_tab():
                 break
 
         last_stage = None
-        for m in reversed(st.session_state.memory):
+        for m in reversed(state["memory"]):
             if m.get("stage"):
                 last_stage = m["stage"]
                 break
@@ -167,32 +176,38 @@ def render_chat_tab():
         agent = result.get("agent") or "advisor_agent"
 
         # ✅ ALWAYS update last message
-        st.session_state.memory[-1]["assistant"] = answer
-        st.session_state.memory[-1]["agent"] = agent
-        st.session_state.memory[-1]["animated"] = False
-        st.session_state.memory[-1]["trace"] = result.get("trace", [])
-        st.session_state.memory[-1]["profile"] = result.get("profile", {})
-        st.session_state.memory[-1]["stage"] = result.get("stage")
+        state["memory"][-1]["assistant"] = answer
+        state["memory"][-1]["agent"] = agent
+        state["memory"][-1]["animated"] = False
+        state["memory"][-1]["trace"] = result.get("trace", [])
+        state["memory"][-1]["profile"] = result.get("profile", {})
+        state["memory"][-1]["stage"] = result.get("stage")
+        
+        state.update({
+            "profile": result.get("profile", state.get("profile")),
+            "stage": result.get("stage"),
+            "last_intent": result.get("last_intent", state.get("last_intent")),
+            "advisor_allocation": result.get("advisor_allocation"),
+            "advisor_insights": result.get("advisor_insights"),
+            "advisor_advice": result.get("advisor_advice"),
+            "active_asset": result.get("active_asset", state.get("active_asset")),
+            })
         st.session_state.pending_query = None
         st.rerun()
         
 
-
-    
     if user_input:
 
         # ALWAYS append fresh user input
-        st.session_state.memory.append({
-        "user": user_input,
+        state["memory"].append({
+        "query": user_input,
         "assistant": None   # ✅ IMPORTANT
         })
 
-        st.session_state.current_index = len(st.session_state.memory) - 1
+        st.session_state.current_index = len(state["memory"]) - 1
         st.session_state.pending_query = user_input
         st.rerun()
-
-    
-                
+         
     st.markdown(
     """
     <script>

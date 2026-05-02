@@ -3,7 +3,7 @@ from utils.state import AgentState
 from utils.llm import get_llm
 from utils.prompts import RAG_PROMPT
 import time
-rag = RAGPipeline()
+from utils.rag_loader import rag
 
 def relevance_boost(r, query):
     content = r.get("content", "").lower()
@@ -119,10 +119,14 @@ def rag_agent(state: AgentState) -> AgentState:
     llm = get_llm(temperature=0.3, max_tokens=1000)
 
     final_prompt = f"""{RAG_PROMPT}
+
 IMPORTANT:
-- Answer MUST be based on the provided context
-- Do NOT use outside knowledge if context is available
-- If context is insufficient, say so clearly
+- Use context as primary source
+- If context is weak or incomplete, use general knowledge to help
+- If this is a follow-up question, continue from previous answer
+- Do NOT say "no information found" if you can reasonably answer
+
+This may be a follow-up question. Use previous conversation to infer meaning.
 
 Conversation:
 {conversation}

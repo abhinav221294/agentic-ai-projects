@@ -6,6 +6,7 @@ from agents.rag_agent import rag_agent
 import re
 import time
 from difflib import get_close_matches
+from utils.llm import get_llm
 
 # -------------------------
 # CENTRAL RESPONSE SETTER
@@ -219,6 +220,52 @@ def merge_allocation(user_alloc, default_alloc):
 
     return result
 
+def extract_profile_llm(query, llm):
+
+    prompt = f"""
+Extract the user's financial profile from the text.
+
+Return ONLY JSON with keys:
+- risk (low / medium / high or null)
+- goal (growth / income or null)
+- investment_type (sip / lump sum or null)
+
+Text:
+{query}
+"""
+
+    try:
+        response = llm.invoke(prompt)
+        content = response.content.strip()
+
+        import json
+        return json.loads(content)
+
+    except Exception:
+        return {}
+    
+def detect_intent_llm(query, llm):
+
+    prompt = f"""
+Classify the user's intent.
+
+Return ONLY one of:
+- advice
+- allocation
+- execution
+- news_invest
+- general_news
+
+Query:
+{query}
+"""
+
+    try:
+        res = llm.invoke(prompt)
+        intent = res.content.strip().lower()
+        return intent
+    except:
+        return "advice"
 
 def advisor_agent(state: AgentState) -> AgentState:
     start = time.time()
@@ -231,7 +278,21 @@ def advisor_agent(state: AgentState) -> AgentState:
     query = re.sub(r"[^\w\s%]", " ", raw_query).lower().strip()
     amount_match = re.search(r"\b\d{3,7}\b", query)
     user_alloc, unknown_assets = extract_user_allocation(query)
+    llm = get_llm(temperature=0)
 
+    intent = detect_intent_llm(state["query"], llm)
+
+    state["intent"] = intent
+    
+    llm = get_llm(temperature=0)
+
+    profile_llm = extract_profile_llm(query, llm)
+
+    profile.update({
+    "risk": profile_llm.get("risk") or profile.get("risk"),
+    "goal": profile_llm.get("goal") or profile.get("goal"),
+    "investment_type": profile_llm.get("investment_type") or profile.get("investment_type")
+    })
 
     # -------------------------
     # STAGE DETECTION (CRITICAL)
@@ -322,6 +383,12 @@ def advisor_agent(state: AgentState) -> AgentState:
     if amount_match:
         profile["amount"] = int(amount_match.group())
 
+    # -------------------------
+    # PRIORITY: AMOUNT INTENT
+    # -------------------------
+    if amount_match and (profile.get("risk") and profile.get("goal")):
+        is_execution = True
+
     # ✅ ADD THIS BLOCK HERE
     expected = state.get("expected_next_input")
 
@@ -350,7 +417,7 @@ def advisor_agent(state: AgentState) -> AgentState:
         missing.append("investment type (SIP / lump sum)")
 
 
-    if not user_alloc and unknown_assets:
+    if not user_alloc and unknown_assets and not amount_match:
         return _set(
                 state, start,
                f"I couldn't recognize: {', '.join(unknown_assets)}.\n"
@@ -448,7 +515,14 @@ Can you share that?
     
     total_user = sum(user_alloc.values()) if user_alloc else 0
     
-
+    # ✅ ADD HERE
+    state["last_intent"] = (
+        "execution" if is_execution
+        else "suggestion" if is_suggestion
+        else "advice"
+        )
+    
+    state["stage"] = state["last_intent"]
 
     default_alloc = ALLOCATION_MAP.get(
     (risk, goal),
@@ -478,7 +552,9 @@ Can you share that?
         final_alloc = default_alloc
     
     # ✅ FINAL ALLOCATION DECIDED → NOW VALIDATE LIMITS
-    
+    if final_alloc:
+        state["active_asset"] = max(final_alloc, key=final_alloc.get)
+        state["allocation_sum"] = sum(final_alloc.values())
     # -------------------------
     # APPLY CAPS
     # -------------------------
@@ -699,7 +775,6 @@ Can you share that?
             "\n\n💡 I can suggest better if you share:\n- Risk level\n- Goal\n- Investment type (SIP or lump sum)"
 
         state["selected_funds"] = selected_funds
-        state["stage"] = "suggestion"
 
     if not suggestion_block and not is_execution:
         suggestion_block = "\n\n💡 If you want, I can suggest specific funds tailored to your profile."
@@ -794,9 +869,65 @@ Can you share that?
 
         profile_section = "\n".join(profile_lines) + "\n\n"
 
-    needs_market = any(w in query for w in ["price", "market"])
-    needs_news = any(w in query for w in ["news", "latest"])
+        needs_market = any(w in query for w in ["price", "market"])
+        needs_news = intent in ["news_invest", "general_news"]
+        # -------------------------
+        # LLM-BASED NEWS INVEST FLOW (NEW)
+        # -------------------------
+        if intent == "news_invest":
 
+            news_context = state.get("news_context")
+
+            # fallback → fetch news if missing
+            if not news_context:
+                news_state = news_agent(state.copy())
+                news_context = news_state.get("answer", "")
+                state["news_context"] = news_context
+
+            llm = get_llm(temperature=0.3, max_tokens=400)
+
+            prompt = f"""
+You are a financial advisor.
+
+User profile:
+- Risk: {profile.get("risk")}
+- Goal: {profile.get("goal")}
+- Investment: {profile.get("investment_type")}
+
+Market news:
+{news_context[:1000]}
+
+Task:
+- Suggest 2–3 stocks or sectors
+- Align with user risk profile
+- Avoid risky suggestions for low-risk users
+- Be concise
+
+Output:
+- Short insight
+- Recommendations
+- Reasoning
+"""
+
+        try:
+            response = llm.invoke(prompt)
+            answer = (response.content or "").strip()
+
+            if not answer:
+                answer = "Unable to generate recommendation based on news."
+
+        except Exception:
+            answer = "Error generating recommendation."
+
+        return _set(
+        state, start,
+        answer,
+        "advisor_agent",
+        0.9,
+        "llm_reasoning",
+        "advisor",
+        "news_invest"
+        )
 
     # -------------------------
     # TOOL ORCHESTRATION (FIXED)
@@ -838,16 +969,17 @@ Can you share that?
         if needs_market:
             market_state = market_agent(state.copy())
             context["market"] = market_state.get("answer", "")
+            state["market_context"] = market_state.get("answer", "")
             if "market_agent" not in tools:
                 tools.append("market_agent")
 
         if needs_news:
             news_state = news_agent(state.copy())
             context["news"] = news_state.get("answer", "")
+            state["news_context"] = news_state.get("answer", "")
             if "news_agent" not in tools:
                 tools.append("news_agent")
         
-
         RISK_KEYWORDS = {
         "low": ["low risk", "safe", "secure", "no loss"],
         "medium": ["balanced", "moderate", "some risk"],
@@ -1067,47 +1199,66 @@ Can you share that?
         else:
                 advice_text = "- Maintain diversification across asset classes"
         warning_msg = warning_msg.strip() 
-        answer = (f"{warning_msg}\n"
-    f"{allocation_gap_msg}\n\n"
-    "Got it — based on what you've shared:\n\n"
-    f"{profile_section}"
-    "---\n\n"
-    "Here’s what this means for you:\n\n"
-    f"{insights_text}\n\n"
-    "---\n\n"
-    "📌 Recommended approach:\n\n"
-    f"{advice_text}\n\n"
-    "---\n\n"
-    "💡 Suggested allocation:\n\n"
-    f"{allocation_hint}\n\n"
-    f"{amount_block if amount_block else ''}"
-    f"{suggestion_block if suggestion_block else ''}"
-    f"{execution_block if execution_block else ''}\n\n"
-    f"{projection_block if projection_block else ''}\n\n"
-    "---\n\n"
-    f"{ending_line}")
+        if is_execution:
+
+            answer = (
+            f"Great — here’s how you can invest {sip_amount}:\n\n"
+            f"{amount_block}\n"
+            f"{suggestion_block if suggestion_block else ''}\n"
+            f"{projection_block if projection_block else ''}\n"
+            f"{execution_block if execution_block else ''}"
+            )
+
+        else:
+
+            answer = (
+            f"{warning_msg}\n"
+            f"{allocation_gap_msg}\n\n"
+            "Got it — based on what you've shared:\n\n"
+            f"{profile_section}"
+            "---\n\n"
+            "Here’s what this means for you:\n\n"
+            f"{insights_text}\n\n"
+            "---\n\n"
+            "📌 Recommended approach:\n\n"
+            f"{advice_text}\n\n"
+            "---\n\n"
+            "💡 Suggested allocation:\n\n"
+            f"{allocation_hint}\n\n"
+            f"{amount_block if amount_block else ''}"
+            f"{suggestion_block if suggestion_block else ''}\n\n"
+            "---\n\n"
+            f"{ending_line}"
+        )
         
         profile = {k: v for k, v in profile.items() if v}
         
-        if is_execution:
-            state["stage"] = "execution"
-        elif is_suggestion:
-            state["stage"] = "suggestion"
-        else:
-            state["stage"] = "advice"
+        state["profile"] = profile
         
-        state["profile"] = profile 
+        state.setdefault("memory", []).append({
+            "query": state.get("query"),
+            "assistant": answer,
+            "stage": state.get("stage"),
+            "agent": "advisor_agent",
+            "profile": state.get("profile")
+            })
+        
         return _set(
-        state, start,
-        answer,
-        "advisor_agent",
-        0.85,
-        "advisor_reasoning",
-        "advisor",
-        "orchestration",
-        {"tools": tools},
-        add_trace=False
-    )
+            state, start,
+            answer,
+            "advisor_agent",
+            0.85,
+            "advisor_reasoning",
+            "advisor",
+            "orchestration",
+            extra={
+                "tools": tools,
+                "advisor_insights": insights_text,
+                "advisor_allocation": final_alloc,
+                "advisor_advice": advice_text
+                },
+            add_trace=False 
+            )
 
     except Exception as e:
         print(f"[ADVISOR ERROR] {e}")

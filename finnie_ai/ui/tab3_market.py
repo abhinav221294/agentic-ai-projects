@@ -1,11 +1,13 @@
 import streamlit as st
 import yfinance as yf
+from utils.llm import get_llm
 
 from utils.stock_mapper import normalize_stock
 from utils.price_utils import get_price
 
-def render_market_tab():
-
+def render_market_tab(state):
+    #state = st.session_state["agent_state"] 
+    
     st.title("📈 Market Trends")
 
     stock_input = st.text_input("Enter stock (e.g., Tesla, Apple, Reliance)")
@@ -32,28 +34,51 @@ def render_market_tab():
 
                 change = latest - prev_day
                 percent_change = (change / prev_day) * 100
+                
+                memory = state.setdefault("memory", [])
+
+                if not memory or memory[-1].get("query") != stock_input:
+                    memory.append({
+                    "query": stock_input,
+                    "assistant": f"{symbol} price is {round(latest, 2)}",
+                    "agent": "market_tab",
+                    "stage": "market"
+                    })
+                
+                state.update({
+                "market_symbol": symbol,
+                "market_price": round(latest, 2),
+                "market_change": round(change, 2),
+                "market_change_pct": round(percent_change, 2),
+                "market_trend": "up" if change > 0 else "down"
+                })
+
+                state["last_intent"] = "market"
+                state["stage"] = "market"
 
                 high_price = data["High"].max()
                 low_price = data["Low"].min()
-
+                range_pct = ((high_price - low_price) / low_price) * 100
+                
+                display_name = symbol.replace(".NS", "")
                 col1, col2, col3 = st.columns(3)
 
                 with col1:
                     st.metric(
-                        label=f"{symbol} Price",
+                        label=f"{display_name} Price",
                         value=round(latest, 2),
                         delta=f"{round(change,2)} ({round(percent_change,2)}%)"  # ✅ FIX: proper formatting
                     )
 
                 with col2:
                     st.metric(
-                        label="📈 Highest (1M)",
+                        label="📈 Highest (1 Month)",
                         value=round(high_price, 2)
                     )
 
                 with col3:
                     st.metric(
-                        label="📉 Lowest (1M)",
+                        label="📉 Lowest (1 Month)",
                         value=round(low_price, 2)
                     )
 
@@ -64,12 +89,95 @@ def render_market_tab():
 
                 st.caption("📊 Based on last 1 month data")
 
+                # Trend classification
+                if abs(percent_change) < 1:
+                    trend = "sideways"
+                elif percent_change > 0:
+                    trend = "uptrend"
+                else:
+                    trend = "downtrend"
+
+                # Risk logic (simple version)
+                symbol_lower = symbol.lower()
+
+                if any(x in symbol_lower for x in ["tcs", "infy", "reliance"]):
+                    risk = "Medium ⚖️"
+                else:
+                    risk = "Medium to High ⚠️"
+
+                # UI display
+                st.markdown("### 🧠 Market Insight")
+
+                # 3-column summary (cleaner than one long line)
+                c1, c2, c3 = st.columns(3)
+
+                with c1:
+                    st.metric("Trend", trend)
+
+                with c2:
+                    st.metric("1 Month Range", f"{range_pct:.2f}%")
+
+                with c3:
+                    st.metric("Risk", risk)
+                
+                context = f"""
+                Stock: {display_name}
+                Trend: {trend}
+                1M Range: {range_pct}
+                Risk: {risk}
+                """
+                prompt = f"""
+You are a financial advisor.
+
+Based on:
+{context}
+
+Give ONLY a final recommendation in 1-2 lines.
+
+Rules:
+- Do NOT use numbering or bullet points
+- Do NOT give sections like insight/risk separately
+- Be concise and direct
+- Focus on whether to add this stock to portfolio
+
+Output should be a single short paragraph.
+"""
+                            
+                llm = get_llm(temperature=0.2,max_tokens=250)
+                try:
+                    response = llm.invoke(prompt)
+                    suggestion = (response.content or "").strip()
+
+                    if not suggestion:
+                        suggestion = "Analysis not available right now. Please try again."
+
+                except Exception:
+                        suggestion = "Unable to generate insight at the moment."
+                
+                # Actionable note
+                st.info(f"💡 **What to do:** {suggestion}")
+
             except Exception:
                 current_price = get_price(symbol)
+                memory = state.setdefault("memory", [])
+
+                if not memory or memory[-1].get("query") != stock_input:
+                    memory.append({
+                    "query": stock_input,
+                    "assistant": f"{symbol} price is {round(current_price, 2)}",
+                    "agent": "market_tab",
+                    "stage": "market"
+                    })
 
                 if current_price:
+                    state.update({
+                    "market_symbol": symbol,
+                    "market_price": round(current_price, 2),
+                    "market_trend": "unknown",
+                    "market_source": "fallback"
+                    })
                     st.warning("⚠️ Showing live price (chart unavailable)")
-
+                    state["stage"] = "market"
 
                     # -------------------------
                     # ✅ FIX 2: Restore 3-column layout

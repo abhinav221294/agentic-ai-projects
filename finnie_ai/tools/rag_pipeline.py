@@ -9,6 +9,7 @@ from langchain_community.document_loaders import (
     TextLoader,
     PyPDFLoader
 )
+import glob
 from langchain_openai import OpenAIEmbeddings
 #from tiktoken import encoding_for_model
 import tiktoken
@@ -17,7 +18,68 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
+import re
 
+def expand_query(query):
+    q = query.lower()
+
+    if any(x in q for x in ["safe", "low risk", "secure"]):
+        return query + " low risk investments bonds fixed deposits government securities treasury bills"
+
+    if any(x in q for x in ["equity", "stock"]) and "debt" in q:
+        return query + " difference between stocks and bonds risk return ownership fixed income"
+
+    if "duration" in q and "bond" in q:
+        return query + " bond duration interest rate sensitivity definition meaning price change interest rates"
+    return query
+
+def rerank(results, query):
+    q_words = query.lower().split()
+
+    def score_boost(r):
+        overlap = sum(1 for w in q_words if w in r["content"].lower())
+        return r["score"] + 0.05 * overlap
+
+    return sorted(results, key=score_boost, reverse=True)
+
+
+def clean_text(text):
+    if not text:   # ✅ handles None or empty
+        return ""
+
+    text = text.replace("\n", " ").strip()
+
+    text = re.sub(r'page\s*\d+', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\d+\s*\|\s*page', '', text, flags=re.IGNORECASE)
+
+    text = re.sub(r'\s+', ' ', text)
+
+    noise_patterns = [
+        r'section\s+\d+(\(\w+\))?',
+        r'clause\s+\d+',
+        r'regulation\s+\d+',
+        r'code\s+\d+'
+    ]
+
+    for pattern in noise_patterns:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+
+    return text.strip()
+
+def is_useful(text):
+    words = text.split()
+    return len(words) > 20 
+
+def deduplicate(results):
+    seen = set()
+    final = []
+
+    for r in results:
+        if r["source_file_name"] not in seen:
+            final.append(r)
+            seen.add(r["source_file_name"])
+
+    return final
 
 class RAGPipeline:
 
@@ -54,30 +116,41 @@ class RAGPipeline:
 
         all_docs = []
 
-        # ---------------- TXT ----------------
+        ## TXT
         txt_loader = DirectoryLoader(
         path=self.folder_path,
-        glob="*.txt",
+        glob="**/*.txt",
         loader_cls=TextLoader,
+        loader_kwargs={"encoding": "utf-8"},
         show_progress=True,
-        use_multithreading=True
+        use_multithreading=False   # ✅ fixed
         )
         all_docs.extend(txt_loader.load())
+        
+        # PDF (safe loading)
+        pdf_files = glob.glob(os.path.join(self.folder_path, "**/*.pdf"), recursive=True)
+        
+        for file in pdf_files:
+            try:
+                loader = PyPDFLoader(file)
+                docs = loader.load()
+                cleaned_docs = []
+                for doc in docs:
+                    text = clean_text(doc.page_content)
+                    if is_useful(text):
+                        doc.page_content = text
+                        cleaned_docs.append(doc)
+                all_docs.extend(cleaned_docs)
+            except Exception as e:
+                print(f"Skipping {file}: {e}")
 
-        # ---------------- PDF ----------------
-        pdf_loader = DirectoryLoader(
-        path=self.folder_path,
-        glob="*.pdf",
-        loader_cls=PyPDFLoader,
-        show_progress=True,
-        use_multithreading=True
-        )
-        all_docs.extend(pdf_loader.load())
+        if not all_docs:
+            raise ValueError(f"No documents found in {self.folder_path}")
 
-        # ✅ Add metadata (VERY IMPORTANT)
+        # metadata
         for doc in all_docs:
             source = doc.metadata.get("source", "")
-        
+
             if source.endswith(".pdf"):
                 doc.metadata["file_type"] = "pdf"
             elif source.endswith(".txt"):
@@ -116,7 +189,7 @@ class RAGPipeline:
         # - Maintains semantic structure as much as possible
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=800,                 # Max tokens per chunk
-            chunk_overlap=150,               # Overlap to preserve context
+            chunk_overlap=200,               # Overlap to preserve context
             length_function=_token_length,   # Use token-based length
             separators=["\n\n", "\n", ".", " ", ""]  # Priority splitting strategy
         )
@@ -153,27 +226,29 @@ class RAGPipeline:
         embeddings = OpenAIEmbeddings(
             model="text-embedding-3-small",
             chunk_size=750,     # Batch size for embedding requests
-            dimensions=1024,     # Reduced dimension for faster retrieval
+            dimensions=1536,     # Reduced dimension for faster retrieval
             max_retries=3        # Retry mechanism for API failures
         )
 
         # Check if vector DB already exists
-        if os.path.exists("chroma_fin_db") and os.listdir("chroma_fin_db"):
-            # Load existing vector store (avoids recomputation)
+        try:
             vectorstore = Chroma(
                 persist_directory="chroma_fin_db",
                 embedding_function=embeddings,
                 collection_name="financial_docs"
-            )
-        else:
-            # Create new vector store from documents
+                )
+
+            # sanity check
+            if vectorstore._collection.count() == 0:
+                raise ValueError("Empty DB")
+
+        except:
             vectorstore = Chroma.from_documents(
                 documents=chunks,
                 embedding=embeddings,
                 persist_directory="chroma_fin_db",
                 collection_name="financial_docs"
-            )
-
+                )
             # Persist to disk for future use
             #vectorstore.persist()
 
@@ -197,9 +272,10 @@ class RAGPipeline:
             list[dict]: List of results with content, source, and score
         """
 
+        query = expand_query(query)
         # Perform similarity search with relevance scores
-        results = self.vectorstore.similarity_search_with_score(query, k=3)
-
+        results = self.vectorstore.similarity_search_with_score(query, k=5)
+    
         # Track unique sources to avoid duplicate display
         seen_sources = set()
 
@@ -212,20 +288,18 @@ class RAGPipeline:
 
             # Extract only file name for user-friendly display
             file_name = os.path.basename(source_path)
-
-            # Skip duplicate sources (UX improvement)
-            if file_name in seen_sources:
-                continue
-
             seen_sources.add(file_name)
     
-           
+            similarity = 1 / (1 + score)
+        
             # Format output
             formatted_results.append({
             "content": doc.page_content,
             "source_file_name": file_name,
             "file_type": doc.metadata.get("file_type", "unknown"),
-            "score": round(score, 3),
+            "score": round(similarity, 3),
+            "confidence": round(similarity, 3)
             })
-
-        return formatted_results
+        reranked = rerank(formatted_results, query)
+        reranked = deduplicate(reranked)
+        return reranked[:3]

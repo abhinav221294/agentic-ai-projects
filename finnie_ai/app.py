@@ -1,4 +1,6 @@
 import streamlit as st
+st.set_page_config(page_title="Finnie AI", layout="wide")
+
 from ui.tab1_chat import render_chat_tab
 from ui.tab2_portfolio import render_portfolio_tab
 from ui.tab3_market import render_market_tab
@@ -6,11 +8,12 @@ from ui.tab4_news import render_news_tab
 from dotenv import load_dotenv
 import os
 
+
 load_dotenv()
 
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
-st.set_page_config(page_title="Finnie AI", layout="wide")
+
 
 # -------------------------
 # ENV VALIDATION (startup)
@@ -205,6 +208,16 @@ st.markdown(f"""
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
+if "agent_state" not in st.session_state:
+    st.session_state["agent_state"] = {
+        "memory": [],
+        "profile": {},
+        "trace": [],
+        "tools_used": [],
+        "stage": None,
+        "last_intent": None
+    }
+
 # -------------------------------
 # TABS
 # -------------------------------
@@ -213,13 +226,13 @@ tab1, tab2, tab3, tab4 = st.tabs(
 )
 
 with tab1:
-    render_chat_tab()
+    render_chat_tab(st.session_state["agent_state"])
 
 with tab2:
-    render_portfolio_tab()
+    render_portfolio_tab(st.session_state["agent_state"])
 
 with tab3:
-    render_market_tab()
+    render_market_tab(st.session_state["agent_state"])
 
 with tab4:
-    render_news_tab()
+    render_news_tab(st.session_state["agent_state"])

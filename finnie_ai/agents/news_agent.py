@@ -5,6 +5,10 @@ from dotenv import load_dotenv
 from tools.summarize_text import summarize_article
 from utils.stock_mapper import normalize_stock
 import time
+import re
+from utils.llm import get_llm
+
+
 
 load_dotenv()
 client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
@@ -21,23 +25,76 @@ def _set(state, start, answer, confidence, answer_source, extra=None):
     state["answer_source"] = answer_source
     state["execution_time"] = round(time.time() - start, 2)
 
+
     if extra:
         state.update(extra)
 
     return state
 
-
-def news_agent(state: AgentState) -> AgentState:
-    start = time.time()
-
-    state.setdefault("tools_used", []).extend([
-        "tavily_search",
-        "summarize_article"
+def is_followup(query, memory):
+    history = "\n".join([
+        f"User: {m.get('query')}\nAssistant: {m.get('assistant')}"
+        for m in memory[-2:]
     ])
 
-    query = f"{state['query']} latest news"
-    symbol = normalize_stock(state["query"])
+    prompt = f"""Is the user asking a follow-up question based on previous response?
 
+Conversation:
+{history}
+
+New query:
+{query}
+
+Answer only YES or NO.
+"""
+    try:
+        res = llm.invoke(prompt)
+        return "yes" in res.content.lower()
+    except:
+        return False
+
+
+
+def news_agent(state: AgentState) -> AgentState:
+
+    state.setdefault("trace", []).append({
+    "agent": "news_agent",
+    "action": "fetch_news"
+    })  
+
+    start = time.time()
+
+    tools = state.setdefault("tools_used", [])
+
+    if "tavily_search" not in tools:
+        tools.append("tavily_search")
+
+    if "summarize_article" not in tools:
+        tools.append("summarize_article")
+
+    query = f"{state.get('query', '')} latest news"
+    query = re.sub(r'[^a-z\s]', '',query).lower().strip()
+    symbol = normalize_stock(state.get("query", ""))
+    articles = state.get("news_articles", [])
+
+    memory = state.get("memory", [])
+
+    if state.get("news_articles") and is_followup(state.get("query", ""), memory):
+
+        articles = state.get("news_articles", [])
+
+        summary_text = "📰 Summary of latest news:\n\n"
+
+        for i, article in enumerate(articles[:3], 1):
+            summary_text += f"{i}. {article['title']}\n"
+            summary_text += f"- {article.get('summary', '')[:200]}\n\n"
+
+        return _set(
+        state, start,
+        summary_text,
+        0.9,
+        "memory"
+        )   
     try:
         results = client.search(
             query=query,
@@ -57,35 +114,53 @@ def news_agent(state: AgentState) -> AgentState:
         if symbol:
             company_keyword = symbol.split(".")[0].lower()
 
-        filtered_articles = []
+        if company_keyword:
+            filtered_articles = []
+            for article in articles:
+                text = ((article.get("title") or "") + (article.get("content") or "")).lower()
+                if company_keyword in text:
+                    filtered_articles.append(article)
+
+            articles = filtered_articles if filtered_articles else articles[:3]
+        
+        # -------------------------
+        # PROCESS ARTICLES
+        # -------------------------
+
+        processed_articles = []
+
         for article in articles:
-            text = ((article.get("title") or "") + (article.get("content") or "")).lower()
-            if company_keyword and company_keyword in text:
-                filtered_articles.append(article)
+            content = article.get("content") or article.get("snippet") or ""
+            summary = summarize_article(content[:2000]) if content else "Summary not available."
 
-        articles = filtered_articles if filtered_articles else articles[:3]
-
+            processed_articles.append({
+                "title": article.get("title"),
+                "url": article.get("url"),
+                "summary": summary
+                })
         # -------------------------
         # BUILD RESPONSE
         # -------------------------
         response = "📰 Latest News:\n\n"
+            
+        for i, article in enumerate(processed_articles, 1):
+                response += f"{i}. {article['title']}\n\n"
+                response += f"{article['summary']}\n\n"
+                response += f"For detail:\n{article['url']}\n\n"
 
-        for i, article in enumerate(articles, 1):
-            title = article.get("title", "No title")
-            url = article.get("url", "")
-            content = article.get("content", "") or article.get("snippet", "")
+        extra = {
+            "news_articles": processed_articles,
+            "news_query": query,
+            "news_symbol": symbol
+            }
 
-            summary = summarize_article(content[:2000]) if content else "Summary not available."
-
-            response += f"{i}. {title}\n\n"
-            response += f"{summary}\n\n"
-            response += f"For detail:\n{url}\n\n"
 
         return _set(
             state, start,
             response,
             0.9,
-            "news_api"
+            "news_api",
+            extra=extra
         )
 
     except Exception as e:

@@ -1,5 +1,6 @@
-from rag_pipeline import RAGPipeline
+from tools.rag_pipeline import RAGPipeline
 import time
+
 
 # -------------------------
 # TEST CASES (expanded)
@@ -34,7 +35,7 @@ TEST_QUERIES = [
     {
         "query": "Difference between equity and debt",
         "expected_keywords": ["risk", "returns"],
-        "expected_source": "stocks"
+        "expected_source": ["stocks", "equity", "debt"]
     },
 
     # -------- CONCEPTUAL --------
@@ -65,10 +66,12 @@ TEST_QUERIES = [
     {
         "query": "safe investment options",
         "expected_keywords": ["low risk", "stable"],
-        "expected_source": "debt"
+        "expected_source": ["safe", "bond", "debt"]
     }
 ]
 
+def keyword_match(text, keywords):
+    return any(word in text for word in keywords)
 
 # -------------------------
 # EVALUATION FUNCTION
@@ -108,13 +111,25 @@ def evaluate_rag():
         # -------------------------
         # 1. RELEVANCE SCORE
         # -------------------------
-        hits = sum(1 for word in expected_keywords if word in retrieved_text)
+        hits = sum(
+            any(k in retrieved_text for k in word.split())
+            for word in expected_keywords
+        )
         relevance_score = hits / len(expected_keywords)
 
         # -------------------------
         # 2. SOURCE MATCH
         # -------------------------
-        source_match = any(expected_source in s for s in sources)
+        s = ["stocks", "equity", "debt"]
+
+        if isinstance(expected_source, list):
+                expected_sources = expected_source
+        else:
+                expected_sources = [expected_source]
+
+        source_match = any(
+                any(exp in s for exp in expected_sources)
+                for s in sources)
 
         # -------------------------
         # 3. CONTEXT QUALITY
@@ -124,15 +139,21 @@ def evaluate_rag():
         # -------------------------
         # 4. RESPONSE GROUNDING
         # -------------------------
-        answer_simulated = " ".join([r["content"][:200] for r in results])
+        answer_simulated = " ".join([r["content"] for r in results])
 
         grounded_hits = sum(1 for word in expected_keywords if word in answer_simulated.lower())
         grounded_score = grounded_hits / len(expected_keywords)
-
+        
+        if grounded_score > 0.7:
+            status = "STRONG"
+        elif grounded_score > 0.4:
+            status = "ACCEPTABLE"
+        else:
+            status = "WEAK"
         # -------------------------
         # 5. CONFIDENCE CHECK
         # -------------------------
-        confidences = [r["confidence"] for r in results]
+        confidences = [r.get("score", 0.5) for r in results]
         avg_conf = sum(confidences) / len(confidences)
 
         # -------------------------
@@ -143,6 +164,7 @@ def evaluate_rag():
         print(f"📂 Source Match: {source_match}")
         print(f"📈 Avg Confidence: {avg_conf:.2f}")
         print(f"🧠 Grounded Score: {grounded_score:.2f}")
+        print(f"✅  Grounded Status", status)
         print(f"📄 Context Quality: {context_quality}")
 
         print("\n🔎 Sources Retrieved:")

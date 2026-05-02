@@ -24,7 +24,7 @@ def set_mode_quantity():
     st.session_state["mode_input"] = "Quantity"
 
 
-def render_portfolio_tab():
+def render_portfolio_tab(state):
 
     st.title("📊 Portfolio Insights")
 
@@ -85,8 +85,8 @@ def render_portfolio_tab():
     #  Button (no form)
     add_btn = st.button("Add to Portfolio")
 
-    if "portfolio" not in st.session_state:
-        st.session_state["portfolio"] = []
+    #state = st.session_state["agent_state"]
+    state.setdefault("portfolio", [])
 
     if add_btn and Company.strip():
         normalized_Company = normalize_stock(Company)     
@@ -113,7 +113,7 @@ def render_portfolio_tab():
 
                 found = False
 
-                for p in st.session_state["portfolio"]:
+                for p in state["portfolio"]:
                     if p["Company"] == normalized_Company and p["asset_type"] == asset_type:
                         p["quantity"] += round(final_qty, 2)
                         p["amount"] += round(final_amt, 2)
@@ -121,7 +121,7 @@ def render_portfolio_tab():
                         break
 
                 if not found:
-                    st.session_state["portfolio"].append({
+                    state["portfolio"].append({
                     "Company": normalized_Company,
                     "quantity": round(final_qty, 2),
                     "amount": round(final_amt, 2),
@@ -131,12 +131,12 @@ def render_portfolio_tab():
                 st.success(f"{normalized_Company} updated in portfolio")
                 
                 # Reset inputs
-                st.session_state["reset_form"] = True
+                state["reset_form"] = True
                 st.rerun()
 
     st.markdown("### 📁 Your Portfolio")
 
-    portfolio = st.session_state["portfolio"]
+    portfolio = state["portfolio"]
 
     if not portfolio:
         st.info("No holdings added yet.")
@@ -209,6 +209,18 @@ def render_portfolio_tab():
             df["Weighted Risk"] = df["Risk Score"] * df["Value (₹)"]
 
             portfolio_risk = df["Weighted Risk"].sum() / total_value
+
+            asset_type_summary = df.groupby("asset_type")["Value (₹)"].sum().to_dict()
+
+            state.update({
+            "portfolio_summary": {
+            "total_value": total_value,
+            "risk_score": round(portfolio_risk, 2),
+            "diversification": len(df)
+            },
+            "portfolio_allocation": df[["Company", "Allocation (%)"]].to_dict("records"),
+            "portfolio_assets": asset_type_summary
+            })
 
             # 🔹 KPI Cards (Top section)
             top_company = df.loc[df['Value (₹)'].idxmax(), 'Company']
@@ -325,7 +337,7 @@ def render_portfolio_tab():
             holdings_text = df[['Company','Value (₹)','asset_type','Allocation (%)']].to_string(index=False)
             
             
-            asset_type_summary = df.groupby("asset_type")["Value (₹)"].sum().to_dict()
+            
 
             asset_df = df.groupby("asset_type")["Value (₹)"].sum()
 
@@ -341,5 +353,7 @@ def render_portfolio_tab():
                         }
 
                         result = analyze_portfolio(payload)
+                        state["portfolio_insights"] = result
+
                         st.subheader("📊 AI Insights")
                         st.write(result)

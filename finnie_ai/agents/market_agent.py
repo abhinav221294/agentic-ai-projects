@@ -78,13 +78,20 @@ def _set(state, start, answer, confidence, decision_source, answer_source, extra
 
 def market_agent(state: AgentState) -> AgentState:
     start = time.time()
-
+    memory = state.get("memory", [])
     raw_query = state["query"]
     query = re.sub(r"[^a-zA-Z0-9\s]", "", raw_query.lower())
 
+
+    if memory and len(query.split()) <= 3:
+        last_query = next(
+        (m.get("query", "") for m in reversed(memory) if m.get("query")),
+        ""
+        )
+        query = f"{last_query} {query}"
+
     symbol = None
     company_name = None
-    query_words = query.split()
 
     # -------------------------
     # STOCK DETECTION
@@ -92,7 +99,7 @@ def market_agent(state: AgentState) -> AgentState:
     for key, val in sorted(STOCK_MAP.items(), key=lambda x: -len(x[0])):
         key_words = key.lower().split()
 
-        if all(word in query_words for word in key_words):
+        if any(word in query for word in key_words):
             symbol = val
             company_name = key.title()
             break
@@ -132,29 +139,55 @@ def market_agent(state: AgentState) -> AgentState:
         print(f"yfinance error: {e}")
 
     # -------------------------
-    # FINNHUB
+    # FALLBACK: FINNHUB + ALPHA
     # -------------------------
     if price is None:
-        data = get_finnhub_price(symbol, previous=True)
+        price_data = get_finnhub_price(symbol, previous=True)
 
-        if data and data.get("current"):
-            price = data["current"]
-            prev = data.get("previous", 0)
+        if not price_data:
+            alpha_price = get_alpha_vantage_price(symbol)
 
-            if prev:
-                trend = "📈 Up" if price > prev else "📉 Down"
+            if not alpha_price:
+                return _set(
+                state, start,
+                f"Couldn't fetch price for {company_name} right now.",
+                0.4,
+                "tool",
+                "none"
+                )
 
-            source = "Finnhub"
-
-    # -------------------------
-    # ALPHA
-    # -------------------------
-    if price is None:
-        alpha_price = get_alpha_vantage_price(symbol)
-
-        if alpha_price:
             price = alpha_price
+            trend = "No trend data"
             source = "Alpha Vantage"
+
+        else:
+            current = price_data.get("current")
+            previous = price_data.get("previous")
+            
+            if current:
+                price = current
+
+                if previous:
+                    change = current - previous
+                    pct = (change / previous) * 100
+
+                    trend = "📈 Up" if change > 0 else "📉 Down"
+                    trend += f" ({pct:.2f}%)"
+                else:
+                    trend = "No trend data"
+                
+                if abs(pct) < 1:
+                    trend = "sideways"
+                elif pct > 0:
+                    trend = "uptrend"
+                else:
+                    trend = "downtrend"
+
+                state.update({
+                    "market_trend_type": trend
+                })
+
+                source = "Finnhub"
 
     # -------------------------
     # RESPONSE
@@ -185,13 +218,20 @@ def market_agent(state: AgentState) -> AgentState:
         )
 
         return _set(
-            state, start,
-            answer,
-            0.9 if normalized_source == "yfinance" else 0.7,
-            "tool",
-            normalized_source
+        state, start,
+        answer,
+        0.9 if normalized_source == "yfinance" else 0.7,
+        "tool",
+        normalized_source,
+        extra={
+            "market_symbol": symbol,
+            "market_company": company_name,
+            "market_price": price,
+            "market_trend": trend,
+            "market_source": normalized_source
+            }
         )
-
+    
     # -------------------------
     # FAILURE
     # -------------------------
