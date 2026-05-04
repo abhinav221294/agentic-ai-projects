@@ -81,7 +81,12 @@ def rerank(results, query):
         overlap = sum(1 for w in q_words if w in r["content"].lower())
 
         # Slight boost for overlap
-        return r["score"] + 0.05 * overlap
+        boost =  0.1 * overlap
+
+        if r["file_type"] == "txt":
+            boost += 0.15
+        
+        return r["score"] + boost
 
     # Sort descending based on boosted score
     return sorted(results, key=score_boost, reverse=True)
@@ -254,27 +259,38 @@ class RAGPipeline:
     def __split_documents(self, docs: list) -> list:
         """
         Splits documents into smaller chunks using token-based splitting.
+        Uses different chunking for PDF vs TXT.
         """
 
-        # Tokenizer aligned with OpenAI models
         encoding = tiktoken.get_encoding("cl100k_base")
 
-        # Token length calculator
         def _token_length(text):
             return len(encoding.encode(text))
 
-        # Recursive splitter
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=800,                 # Max tokens per chunk
-            chunk_overlap=200,              # Overlap for context continuity
-            length_function=_token_length,  # Token-based splitting
-            separators=["\n\n", "\n", ".", " ", ""]  # Splitting priority
-        )
+        all_chunks = []
 
-        # Perform splitting
-        chunks = splitter.split_documents(docs)
+        for doc in docs:
+            file_type = doc.metadata.get("file_type", "unknown")
 
-        return chunks
+            # Adaptive chunking
+            if file_type == "pdf":
+                chunk_size = 300
+                overlap = 50
+            else:
+                chunk_size = 800
+                overlap = 200
+
+            splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=overlap,
+            length_function=_token_length,
+            separators=["\n\n", "\n", ".", " ", ""]
+            )
+
+            chunks = splitter.split_documents([doc])
+            all_chunks.extend(chunks)
+
+        return all_chunks
 
 
     def __create_vector_store(self, chunks: list):
@@ -344,7 +360,7 @@ class RAGPipeline:
             seen_sources.add(file_name)
     
             # Convert distance score → similarity score
-            similarity = 1 / (1 + score)
+            similarity = 1 / (1 + score * 2)
         
             formatted_results.append({
                 "content": doc.page_content,
@@ -359,6 +375,9 @@ class RAGPipeline:
 
         # Remove duplicates
         reranked = deduplicate(reranked)
+
+        if not reranked or reranked[0]["confidence"] < 0.35:
+            return []
 
         # Return top 3 results
         return reranked[:3]

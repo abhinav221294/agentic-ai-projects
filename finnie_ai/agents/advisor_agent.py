@@ -15,8 +15,8 @@ from utils.calculation_utils import calculate_lumpsum_future_value,calculate_sip
 from utils.state_utils import set_state
 from utils.parsing_utils import normalize_term
 # Load environment variables (API keys etc.)
-from dotenv import load_dotenv
 import hashlib
+from dotenv import load_dotenv
 load_dotenv()
 
 
@@ -47,50 +47,237 @@ load_dotenv()
 
 # Allocation mapping
 
+import json
+
 def detect_intent_llm(query, state, llm):
     memory = state.get("memory", [])
+    profile = state.get("profile", {})
 
-    last_msg = memory[-1] if memory else {}
-    last_assistant = last_msg.get("assistant") or ""
-    last_stage = last_msg.get("stage") or state.get("stage")
+    # last 1–2 turns
+    context = []
+    for m in reversed(memory):
+        if m.get("assistant"):
+            context.append({
+                "query": m.get("query"),
+                "intent": m.get("intent")
+            })
+        if len(context) == 2:
+            break
 
-    prompt = f"""You are classifying user intent in a financial assistant.
+    context_text = "\n".join([
+        f"- {c['query']} ({c['intent']})"
+        for c in reversed(context)
+    ])
 
-Previous stage: {last_stage}
+    prompt = f"""
+You are a financial assistant.
 
-Last assistant message:
-{last_assistant[:300]}
+Determine the user's intent.
 
-User message:
+-------------------------
+CONTEXT
+-------------------------
+Recent conversation:
+{context_text}
+
+User profile:
+- Risk: {profile.get("risk")}
+- Goal: {profile.get("goal")}
+- Investment: {profile.get("investment_type")}
+- Amount: {profile.get("amount")}
+
+-------------------------
+INTENTS
+-------------------------
+Return ONLY one:
+
+- advice → general question
+- allocation → portfolio / fund suggestion
+- projection → returns / future value
+- execution → proceed / go ahead
+- modify → user updates profile (risk, goal, amount)
+- news_invest → investing based on market/news
+- general_news → news only
+
+RULES (strict priority):
+
+1. execution  
+User wants to proceed/continue  
+("yes", "go ahead", "start", "next step") → execution
+
+2. modify  
+User explicitly changes profile  
+(risk, goal, amount, investment type) → modify
+
+3. projection  
+Asks about returns, growth, future value, inflation, or goal sufficiency → projection
+
+4. advice  
+- timing decisions (invest now vs wait)  
+- vague preferences (safe, balanced, less risk)  
+- incomplete inputs (only amount or unclear goal)  
+- macro uncertainty (inflation, volatility, economy without clear allocation ask)  
+→ advice
+
+5. news_invest  
+ONLY if user explicitly asks for investment decisions BASED ON  
+market trends / economy / sector
+
+- Must indicate dependency on external conditions  
+  (e.g., "based on current market", "which sectors are good now")
+
+- Generic mentions (inflation, volatility, uncertainty) → advice  
+
+If personal profile context present → allocation
+
+6. allocation  
+
+If query contains conflicting constraints:
+   (high return + low/zero risk, safety + high growth)
+→ allocation
+
+If ANY of below:
+
+- user EXPLICITLY asks for:
+  "allocate", "split", "portfolio", "mix", "funds"
+
+-user asks HOW to invest AND provides ANY personal context:
+   (risk OR goal)
+→ allocation
+
+- OR allocation + projection combined
+
+Otherwise → advice
+
+7. general_news  
+News only, no investment decision
+
+8. advice
+
+If query contains STRICT conflicting constraints:
+   (high/guaranteed returns + zero/no risk)
+→ allocation
+
+If user expresses balanced preference:
+   (good returns + low risk, safe + decent returns)
+→ advice
+-------------------------
+USER QUERY
+-------------------------
 {query}
 
-Classify into ONE of:
+Answer ONLY one word.
+"""
 
-1. confirm → user agrees or wants to proceed (yes, ok, please, go ahead)
-2. projection → user asks about returns, future value, growth
-3. execution → user wants to start/invest/do it now
-4. suggestion → user asks for funds/recommendations/options
-5. modify → user changes inputs (risk, goal, amount, allocation)
-6. advice → general question or unclear intent
-7. news_invest → user wants investment ideas based on news
-8. general_news → user wants latest news
+    res = llm.invoke(prompt)
+    intent = res.content.strip().lower()
 
-Rules:
-- Short replies after suggestion → confirm
-- Asking "what returns?" → projection
-- Saying "start", "invest", "do it" → execution
-- Asking "which funds?" → suggestion
-- Changing numbers/profile → modify
-- If unclear → advice
+    valid = ["advice", "allocation", "projection", "execution", "modify", "news_invest", "general_news"]
 
-Answer ONLY one word."""
+    if intent not in valid:
+        intent = "advice"
+
+    return intent
+
+
+def detect_agents_llm(query, state, intent, llm):
+    profile = state.get("profile", {})
+
+    prompt = f"""
+You are a tool selector for a financial advisor.
+
+Decide which agents are needed.
+
+-------------------------
+QUERY
+-------------------------
+{query}
+
+Intent:
+{intent}
+
+User profile:
+- Risk: {profile.get("risk")}
+- Goal: {profile.get("goal")}
+- Investment: {profile.get("investment_type")}
+- Amount: {profile.get("amount")}
+
+-------------------------
+AVAILABLE AGENTS
+-------------------------
+Return a list from:
+
+- market_agent → for stocks, companies, market analysis
+- news_agent → for trends, news
+- risk_agent → if risk is missing or unclear
+- rag_agent → for explanations or conflict resolution
+
+-------------------------
+RULES
+-------------------------
+- If asking about companies/stocks → market_agent
+- If asking about trends/news → news_agent
+- If risk missing → risk_agent
+- If explanation needed → rag_agent
+- If not needed → return empty list []
+
+-------------------------
+OUTPUT FORMAT (STRICT JSON)
+-------------------------
+["agent1", "agent2"]
+
+-------------------------
+Answer ONLY JSON.
+"""
+
+    res = llm.invoke(prompt)
 
     try:
-        res = llm.invoke(prompt)
-        return res.content.strip().lower()
+        agents = json.loads(res.content)
+        if not isinstance(agents, list):
+            agents = []
     except:
-        return "advice"
+        agents = []
 
+    return agents
+
+def decide_mode(intent, profile):
+    profile_complete = all([
+        profile.get("risk"),
+        profile.get("goal"),
+        profile.get("investment_type")
+    ])
+
+    if not profile_complete:
+        return "ask_missing"
+
+    if intent == "projection":
+        return "project"
+
+    if intent == "execution":
+        return "execute"
+
+    if intent in ["allocation", "modify", "news_invest"]:
+        return "suggest"
+
+    return "advise"
+
+def run_agents(agent_list, state):
+    results = {}
+
+    if "market_agent" in agent_list:
+        results["market"] = market_agent(state)
+
+    if "news_agent" in agent_list:
+        results["news"] = news_agent(state)
+
+    if "risk_agent" in agent_list:
+        results["risk"] = risk_agent(state)
+
+    if "rag_agent" in agent_list:
+        results["rag"] = rag_agent(state)
+
+    return results
 
 def advisor_agent(state: AgentState) -> AgentState:
     start = time.time()
@@ -126,9 +313,19 @@ def advisor_agent(state: AgentState) -> AgentState:
     # -------------------------
     # INTENT DETECTION (moved early)
     # -------------------------
-    #DETECTING INTENT OF USER QUERY 
     llm_intent = detect_intent_llm(query, state, llm)
-    print("LLM Intent: ",llm_intent)    
+
+    intent = llm_intent 
+
+    agents = detect_agents_llm(query, state, intent, llm)
+
+    stage = decide_mode(intent, profile)
+
+    state["intent"] = intent
+    state["stage"] = stage
+
+    print("LLM Intent:", intent)
+
     # -------------------------
     # STAGE DETECTION (CRITICAL)
     # -------------------------
@@ -210,62 +407,6 @@ def advisor_agent(state: AgentState) -> AgentState:
 
     profile_complete = all([risk, goal, investment])
 
-    # -------------------------
-    # DETECT PROFILE COMPLETION MOMENT
-    # -------------------------
-    just_completed_profile = False
-
-    if profile_complete and last_stage is None:
-        just_completed_profile = True
-
-    elif profile_complete and last_stage == "advice":
-            # if amount was missing before and now provided
-        if amount_match:
-            just_completed_profile = True
-
-    # -------------------------
-    # HYBRID STAGE CONTROL
-    # -------------------------
-
-    if len(query.split()) <= 2 and llm_intent in ["confirm", "suggestion"]:
-        intent = "confirm"
-    else:
-        intent = llm_intent
-
-
-    state["intent"] = intent
-
-    if last_stage is None:
-        stage = "advice"
-
-    elif last_stage == "advice":
-        if intent in ["confirm", "suggestion"]:
-            stage = "suggestion"
-        elif intent == "modify":
-            stage = "advice"
-        else:
-            stage = "advice"
-
-    elif last_stage == "suggestion":
-        if intent in ["confirm", "execution"]:
-            stage = "execution"
-        elif intent == "projection":
-            stage = "projection"
-        elif intent == "modify":
-            stage = "advice"
-        else:
-            stage = "suggestion"
-
-    elif last_stage == "projection":
-        if intent in ["confirm", "execution"]:
-            stage = "execution"
-        elif intent == "modify":
-            stage = "advice"
-        else:
-            stage = "projection"
-
-    else:
-        stage = "advice" 
 
     # # 2. THEN compare
     #prev_profile = {}
@@ -306,40 +447,7 @@ def advisor_agent(state: AgentState) -> AgentState:
         missing.append("investment type (SIP / lump sum)")
 
 
-    if not user_alloc and unknown_assets and not amount_match:
-        return set_state(
-            state,
-            start,
-            answer=f"I couldn't recognize: {', '.join(unknown_assets)}.\nTry assets like equity, debt, gold, crypto.",
-            agent="advisor_agent",
-            confidence=0.5,
-            decision_source="validation",
-            answer_source="advisor",
-            trace_action="invalid_input"
-        )
-
-    # ✅ If user gave NO useful info → ask
-    if len(missing) >= 2 and not user_alloc:
-        followup = "\n\nTo refine this further, you can also share:\n"
-        followup += "\n".join([f"- {m}" for m in missing])
-
-        answer = f"""
-Got it — I can help with that.
-
-{followup}
-
-Can you share that?
-"""
-        return set_state(
-            state,
-            start,
-            answer=answer,
-            agent="advisor_agent",
-            confidence=0.9,
-            decision_source="clarification",
-            answer_source="advisor",
-            trace_action="ask_missing"
-        )           
+    
 
     answer = ""
     if user_alloc and not any([risk, goal, investment]):
@@ -351,30 +459,13 @@ Can you share that?
     if user_alloc and not any([profile.get("risk"), profile.get("goal"), profile.get("investment_type")]):
             pass
 
-   
-    # -------------------------
-    # GUARDRAILS (VERY IMPORTANT)
-    # -------------------------
 
-    # Prevent skipping advice → suggestion directly
-    if stage == "suggestion" and last_stage not in [None, "advice"]:
-        stage = "advice"
-    
-    # Prevent jumping to execution early
-    if stage == "suggestion" and last_stage not in [None, "advice"] and intent != "suggestion":
-        stage = "advice"
+    is_suggestion = stage == "suggest"
+    is_projection = stage == "project"
+    is_execution = stage == "execute"
 
-    # Prevent regression
-    if last_stage == "suggestion" and stage == "advice" and intent == "projection":
-        stage = "projection"
-       
-    
-    state["stage"] = stage
 
-    # derive flags (single source of truth)
-    is_suggestion = stage == "suggestion"
-    is_projection = stage == "projection"
-    is_execution = stage == "execution"
+    print("is_projection ",is_projection)
 
 
     # -------------------------
@@ -642,6 +733,42 @@ Can you share that?
             "3. Do not stop during market dips",
             "4. Review portfolio every 6–12 months"
             ])
+    
+    if stage == "project":
+
+        return_map = {
+        "low": 8,
+        "medium": 10,
+        "high": 12
+        }
+
+        rate = return_map.get(risk, 10)
+
+        if investment == "sip":
+            fv_10 = calculate_sip_future_value(amount, rate, 10)
+            fv_15 = calculate_sip_future_value(amount, rate, 15)
+
+            projection_block = f"""
+📈 Future Value Projection:
+
+₹{amount:,}/month → ₹{fv_10:,} in 10 years ({rate}% return)
+₹{amount:,}/month → ₹{fv_15:,} in 15 years ({rate}% return)
+
+👉 Say 'go ahead' to proceed.
+"""
+
+        elif investment == "lump sum":
+            fv_10 = calculate_lumpsum_future_value(amount, rate, 10)
+            fv_15 = calculate_lumpsum_future_value(amount, rate, 15)
+
+            projection_block = f"""
+📈 Future Value Projection:
+
+₹{amount:,} → ₹{fv_10:,} in 10 years ({rate}% return)
+₹{amount:,} → ₹{fv_15:,} in 15 years ({rate}% return)
+
+👉 Say 'go ahead' to proceed.
+"""
 
     profile_lines = []
     profile_section= ""
@@ -661,375 +788,108 @@ Can you share that?
 
         profile_section = "\n".join(profile_lines) + "\n\n"
 
-        needs_market = any(w in query for w in ["price", "market"])
-        needs_news = (
-            intent in ["news_invest", "general_news"]
-            and any(word in query for word in ["news", "market", "impact", "recent"])
-            )
-        # -------------------------
-        # LLM-BASED NEWS INVEST FLOW (NEW)
-        # -------------------------
-        if intent == "news_invest":
-
-            news_context = state.get("news_context")
-
-            # fallback → fetch news if missing
-            if not news_context:
-                news_state = news_agent(state.copy())
-                news_context = news_state.get("answer", "")
-                state["news_context"] = news_context
-
-            llm = get_llm(temperature=0.3, max_tokens=400)
-
-            prompt = f"""You are a financial advisor.
-
-User profile:
-- Risk: {profile.get("risk")}
-- Goal: {profile.get("goal")}
-- Investment: {profile.get("investment_type")}
-
-Market news:
-{news_context[:1000]}
-
-Task:
-- Suggest 2–3 stocks or sectors
-- Align with user risk profile
-- Avoid risky suggestions for low-risk users
-- Be concise
-
-Output:
-- Short insight
-- Recommendations
-- Reasoning"""
-
-            try:
-                response = llm.invoke(prompt)
-                answer = (response.content or "").strip()
-
-                if not answer:
-                    answer = "Unable to generate recommendation based on news."
-
-            except Exception:
-                answer = "Error generating recommendation."
-
-            return set_state(
-                state,
-                start,
-                answer=answer,
-                agent="advisor_agent",
-                confidence=0.9,
-                decision_source="llm_reasoning",
-                answer_source="advisor",
-                trace_action="news_invest"
-                )
+    # -------------------------
+    # RUN AGENTS (CORRECT)
+    # -------------------------
+    agent_results = run_agents(agents, state.copy())
 
     # -------------------------
-    # TOOL ORCHESTRATION (FIXED)
+    # APPEND AGENT INSIGHTS (FINAL)
     # -------------------------
-    context = {}
-    tools = state.setdefault("tools_used", [])
-
-    try:
-
-        available_fields = sum([
-            bool(profile.get("risk")),
-            bool(profile.get("goal")),
-            bool(profile.get("investment_type"))
-        ])
-    
-        # ✅ Call risk agent ONLY if user didn't already specify risk
-        if available_fields > 0 and not profile.get("risk"):
-            risk_state = risk_agent(state.copy())
-
-            # ✅ ALWAYS trace
-            state.setdefault("trace", []).append({
-                "agent": "risk_agent",
-                "action": "evaluation"
-            })
-
-            context["risk"] = risk_state.get("answer", "")
-
-            # ✅ tools separate
-            if "risk_agent" not in tools:
-                tools.append("risk_agent")
-
-        # Optional
-        if needs_market:
-            market_state = market_agent(state.copy())
-            context["market"] = market_state.get("answer", "")
-            state["market_context"] = market_state.get("answer", "")
-            if "market_agent" not in tools:
-                tools.append("market_agent")
-
-        if needs_news:
-            news_state = news_agent(state.copy())
-            context["news"] = news_state.get("answer", "")
-            state["news_context"] = news_state.get("answer", "")
-            if "news_agent" not in tools:
-                tools.append("news_agent")
-        
-    
-
-        conflict_msgs = []
-        conflict_flag = False
-
-        # LOW risk conflicts
-        if risk == "low" and any(w in query for w in [
-        "aggressive", "high return", "maximum return", "fast growth"
-        ]):
-            conflict_msgs.append("low risk vs high return/aggressive growth")
-
-        # HIGH risk contradictions
-        if risk == "high" and any(w in query for w in [
-        "low return", "stable return", "guaranteed"
-        ]):
-            conflict_msgs.append("high risk vs low/stable return")
-
-        # GROWTH contradictions
-        if goal == "growth" and any(w in query for w in [
-        "low return", "safe return"
-        ]):
-            conflict_msgs.append("growth vs low return")
-
-        # INCOME contradictions
-        if goal == "income" and any(w in query for w in [
-        "high return", "aggressive"
-        ]):
-            conflict_msgs.append("income vs aggressive growth")
-
-        # FINAL FLAG
-        if conflict_msgs:
-            conflict_flag = True
-            conflict_msg = (
-            "Your preferences include some conflicting goals: "
-            + ", ".join(conflict_msgs)
-            + ". Typically, higher returns require taking higher risk."
-            )
 
 
-            rag_state = rag_agent(state.copy())
-
-            state.setdefault("trace", []).append({
-                "agent": "rag_agent",
-                "action": "retrieval"
-            })
-
-            ans = rag_state.get("answer") or ""
-
-            if ans and not any(x in ans.lower() for x in [
-                "unable",
-                "couldn't find",
-                "no information"
-                ]):
-                context["knowledge"] = ans
-
-        insights = []
-
-        if context.get("knowledge"):
-            clean_knowledge = context["knowledge"].replace("📚 Based on internal documents.", "")
-            insights.append(clean_knowledge.strip())
-
-        if context.get("risk"):
-            insights.append(context["risk"])
-
-        if conflict_flag:
-            insights.append(conflict_msg)
-
-        if not insights:
-            if risk == "low" and goal == "income":
-                insights.append(
-               "A conservative strategy focused on stable, income-generating investments is ideal. Your priority should be preserving capital while generating steady returns."
-                )
-
-            elif risk == "low" and goal == "growth":
-                insights.append(
-                "You prefer low risk but still want growth, so a balanced approach with limited equity exposure is suitable."
-                )
-
-            elif risk == "medium" and goal == "growth":
-                insights.append(
-                "A balanced strategy with both equity and debt can help you achieve growth while managing risk."
-                )
-
-            elif risk == "medium" and goal == "income":
-                    insights.append(
-                    "A balanced approach focusing slightly more on stable income assets is suitable."
-                )
-
-            elif risk == "high" and goal == "growth":
-                insights.append(
-                "You can focus on high equity exposure for long-term growth, accepting higher volatility."
-                )
-
-            elif risk == "high" and goal == "income":
-                insights.append(
-                "Even with a higher risk appetite, you should maintain some stable assets for income."
-                )
-
-            elif risk:
-                insights.append(
-                "Your investment strategy should align with your risk tolerance."
-                )
-
-            elif goal:
-                insights.append(
-                "Your investments should be aligned with your financial goals."
-                )
-
-            else:
-                insights.append(
-                "A diversified approach across asset classes is a good starting point."
-                )
-        insights_text = "\n\n".join(insights)
-        
-        advice_lines = []
-        
-        if profile.get("risk") == "low":
-            advice_lines.append("Focus more on stable options like debt and hybrid funds")
-
-        elif profile.get("risk") == "medium":
-            advice_lines.append("Balance between equity and debt for growth and stability")
-
-        elif profile.get("risk") == "high":
-            advice_lines.append("You can take higher exposure to equity for long-term growth")
-
-        if profile.get("goal") == "growth":
-            advice_lines.append("Include equity exposure to maximize long-term returns")
-
-        elif profile.get("goal") == "income":
-            advice_lines.append("Prioritize stable and income-generating investments")
-
-        if profile.get("investment_type") == "sip":
-            advice_lines.append("Continue SIP for disciplined investing over time")
-
-        if risk == "high" and goal == "income":
-            insights.append(
-            "Focus on dividend-paying equities and income-generating assets while maintaining some stability."
-            )
-        
-        allocation_hint = ""
-
-        # -------------------------
-        # FULL CASE (risk + goal)
-        # -------------------------
-        
-        allocation_hint = "\n".join([
-            f"- {v}% {k.capitalize()}"
-            for k, v in final_alloc.items()
-            ])
-
-        if advice_lines:
-                advice_text = "\n".join(f"- {line}" for line in advice_lines)
-        else:
-                advice_text = "- Maintain diversification across asset classes"
-        
-        warning_msg = warning_msg.strip() 
-
-        # -------------------------
-# STAGE-BASED RESPONSE (FIX)
-# -------------------------
-        fv_10 = None
-        fv_15 = None
-
-        if amount:  
-            rate = {"low": 8, "medium": 10, "high": 12}.get(risk, 10)
-            if investment == "sip":
-                fv_10 = calculate_sip_future_value(amount, rate, 10)
-                fv_15 = calculate_sip_future_value(amount, rate, 15)
-
-            elif investment == "lump sum":
-                fv_10 = calculate_lumpsum_future_value(amount, rate, 10)
-                fv_15 = calculate_lumpsum_future_value(amount, rate, 15)
-        if is_execution:   
-            answer = (
-            f"Great — here’s how you can invest {sip_amount}:\n\n"
-            f"{amount_block}\n"
-            f"{projection_block}\n"
-            f"{execution_block}"
-            )
-
-        elif is_projection:
-
-            if investment == "sip":
-                line1 = f"- ₹{amount:,}/month → ₹{fv_10:,} in 10 years ({rate}% return)"
-                line2 = f"- ₹{amount:,}/month → ₹{fv_15:,} in 15 years ({rate}% return)"
-            else:
-                line1 = f"- ₹{amount:,} → ₹{fv_10:,} in 10 years ({rate}% return)"
-                line2 = f"- ₹{amount:,} → ₹{fv_15:,} in 15 years ({rate}% return)"
-
-            answer = (
-                "📈 Future Value Projection:\n\n"
-                f"{line1}\n"
-                f"{line2}\n"
-                "👉 Say 'go ahead' to see how to invest step-by-step."
-                )
-
-        elif is_suggestion:
-            answer = (
-            f"📊 Suggested funds:\n\n"
-            f"{alloc(state.get('selected_funds', []))}\n\n"
-            "If you want, I can help you set this up step-by-step."
-            )
-
-        else:
-
-            answer = (
-            f"{warning_msg}\n"
-            f"{allocation_gap_msg}\n\n"
-            "Got it — based on what you've shared:\n\n"
-            f"{profile_section}"
-            "---\n\n"
-            "Here’s what this means for you:\n\n"
-            f"{insights_text}\n\n"
-            "---\n\n"
-            "📌 Recommended approach:\n\n"
-            f"{advice_text}\n\n"
-            "---\n\n"
-            "💡 Suggested allocation:\n\n"
-            f"{allocation_hint}\n\n"
-            f"{amount_block if amount_block else ''}\n\n"
-            "💡 If you want, I can suggest specific funds."
+    if not user_alloc and unknown_assets and not amount_match:
+        return set_state(
+            state,
+            start,
+            answer=f"I couldn't recognize: {', '.join(unknown_assets)}.\nTry assets like equity, debt, gold, crypto.",
+            agent="advisor_agent",
+            confidence=0.5,
+            decision_source="validation",
+            answer_source="advisor",
+            trace_action="invalid_input"
         )
-        
-        profile = {k: v for k, v in profile.items() if v}
-        
-        state["profile"] = profile
-        
-        print("profile ", profile)
-        
+
+        # ✅ If user gave NO useful info → ask
+    if len(missing) >= 2 and not user_alloc:
+        followup = "\n\nTo refine this further, you can also share:\n"
+        followup += "\n".join([f"- {m}" for m in missing])
+
+        answer = f"""Got it — I can help with that.
+
+{followup}
+
+Can you share that?
+"""
         return set_state(
             state,
             start,
             answer=answer,
             agent="advisor_agent",
-            confidence=0.85,
-            decision_source="advisor_reasoning",
+            confidence=0.9,
+            decision_source="clarification",
             answer_source="advisor",
-            trace_action="orchestration",
-            extra={
-                "tools_used": tools,
-                "advisor_insights": insights_text,
-                "advisor_allocation": final_alloc,
-                "advisor_advice": advice_text
-            },
-            add_trace=False
-            )           
+            trace_action="ask_missing"
+        )
 
-    except Exception as e:
-        print(f"[ADVISOR ERROR] {e}")
+    intro = ""
+    if is_projection:
+        intro = "Here’s how your investment can grow over time:"
+    elif is_execution:
+        intro = "Great — here’s how you can proceed:"
+    elif is_suggestion:
+        intro = "Here’s a plan based on your profile:"
+    else:
+        intro = "Got it — based on what you've shared:"
+    
+    answer = f"""{intro}
 
-        return set_state(
-            state,
-            start,
-            answer="Unable to process request.",
-            agent="advisor_agent",
-            confidence=0.2,
-            decision_source="error",
-            answer_source="advisor",
-            trace_action="error",
-            extra={ 
-                "error": str(e),
-                "error_type": type(e).__name__,
-                "error_stage": state.get("stage")
-                }
-            )
+{profile_section}
+
+📌 Recommended approach:
+
+- Balanced allocation based on your risk profile
+- Diversification across asset classes
+- Continue disciplined investing
+
+💡 Suggested allocation:
+
+{alloc([f"{k.capitalize()} → {v}%" for k, v in final_alloc.items()])}
+
+{amount_block}
+
+{suggestion_block}
+
+{projection_block if is_projection else ""}
+
+{execution_block if is_execution else ""}
+"""
+
+    if agent_results.get("market"):
+        answer += "\n\n📊 Market Insights:\n" + agent_results["market"]
+
+    if agent_results.get("news"):
+        answer += "\n\n📰 Latest Trends:\n" + agent_results["news"]
+
+    if agent_results.get("risk"):
+        answer += "\n\n⚠️ Risk Insight:\n" + agent_results["risk"]
+
+    if agent_results.get("rag"):
+        answer += "\n\n📘 Additional Info:\n" + agent_results["rag"]
+
+    extra={
+    "tools_used": agents,
+    "advisor_allocation": final_alloc
+    }
+
+    return set_state(
+    state,
+    start,
+    answer=answer,
+    agent="advisor_agent",
+    confidence=0.85,
+    decision_source="advisor_reasoning",
+    answer_source="advisor",
+    trace_action="orchestration",
+    extra=extra   # ✅ ADD THIS
+)
