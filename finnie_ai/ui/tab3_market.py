@@ -1,7 +1,7 @@
 import streamlit as st
 import yfinance as yf
 from utils.llm import get_llm
-
+from utils.prompts import MARKET_ANALYSIS_PROMPT
 from utils.stock_mapper import normalize_stock
 from utils.price_utils import get_price
 
@@ -148,24 +148,10 @@ def render_market_tab(state):
                 1M Range: {range_pct}
                 Risk: {risk}
                 """
-                prompt = f"""
-You are a financial advisor.
-
-Based on:
-{context}
-
-Give ONLY a final recommendation in 1-2 lines.
-
-Rules:
-- Do NOT use numbering or bullet points
-- Do NOT give sections like insight/risk separately
-- Be concise and direct
-- Focus on whether to add this stock to portfolio
-
-Output should be a single short paragraph.
-"""
+                
+                prompt = MARKET_ANALYSIS_PROMPT.format(context)
                             
-                llm = get_llm(temperature=0.2,max_tokens=250)
+                llm = get_llm(temperature=0.1,max_tokens=250)
                 try:
                     response = llm.invoke(prompt)
                     suggestion = (response.content or "").strip()

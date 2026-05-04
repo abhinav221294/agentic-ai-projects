@@ -1,7 +1,6 @@
 # Import LLM utility function to initialize the language model
 from utils.llm import get_llm
 
-
 def analyze_portfolio(payload: dict) -> str:
     """
     Analyzes a user's investment portfolio using an LLM.
@@ -36,27 +35,19 @@ def analyze_portfolio(payload: dict) -> str:
     # -------------------------
     # Create a structured prompt for financial analysis
     # Using f-string to dynamically inject portfolio data
-    prompt = f"""
-    You are a professional financial advisor.
-
-    Analyze the following investment portfolio:
-
-    Total Value: ₹{payload.get("total_value")}
-
-    Holdings:
-    {payload.get("holdings")}
-
-    Risk Distribution:
-    {payload.get("risk_distribution")}
-
-    Provide:
-    - Risk analysis
-    - Diversification feedback
-    - Portfolio weaknesses
-    - Clear actionable suggestions
-
-    Keep response concise (120-180 words) and practical.
-    """
+    prompt = f"""You are a professional financial advisor.
+Analyze the following investment portfolio:
+Total Value: ₹{payload.get("total_value")}
+Holdings:
+{payload.get("holdings")}
+Risk Distribution:
+{payload.get("risk_distribution")}
+Provide:
+- Risk analysis
+- Diversification feedback
+- Portfolio weaknesses
+- Clear actionable suggestions
+Keep response concise (120-180 words) and practical."""
 
     # -------------------------
     # LLM INVOCATION
@@ -75,7 +66,6 @@ def analyze_portfolio(payload: dict) -> str:
         # If LLM call fails (network/API issue), return fallback message
         return "Portfolio analysis failed."
     
-
 
 def summarize_article(content: str) -> str:
     """
@@ -106,18 +96,13 @@ def summarize_article(content: str) -> str:
     # PROMPT CONSTRUCTION
     # -------------------------
     # Define clear instructions for summarization
-    prompt = f"""
-    Summarize the following news article in 120-180 words.
-
-    Focus on:
-    - Key event
-    - Business/financial impact
-    - Important facts
-
-    Article:
-    {content}
-    """
-
+    prompt = f"""Summarize the following news article in 120-180 words.
+Focus on:
+- Key event
+- Business/financial impact
+- Important facts
+Article:
+{content}"""
     # -------------------------
     # LLM INVOCATION
     # -------------------------

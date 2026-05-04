@@ -5,7 +5,9 @@ from agents.news_agent import news_agent
 from agents.rag_agent import rag_agent
 import re
 import time
+import json
 import random
+import hashlib
 from utils.llm import get_llm
 from utils.finance_constants import (ALLOCATION_MAP,MAX_LIMITS,
 FUND_SUGGESTIONS)
@@ -14,12 +16,9 @@ from utils.format_utils import alloc
 from utils.calculation_utils import calculate_lumpsum_future_value,calculate_sip_future_value
 from utils.state_utils import set_state
 from utils.parsing_utils import normalize_term
-# Load environment variables (API keys etc.)
-import hashlib
 from dotenv import load_dotenv
 load_dotenv()
-
-
+# Load environment variables (API keys etc.)
 
 # -------------------------
 # CENTRAL RESPONSE SETTER
@@ -47,7 +46,6 @@ load_dotenv()
 
 # Allocation mapping
 
-import json
 
 def detect_intent_llm(query, state, llm):
     memory = state.get("memory", [])
@@ -69,17 +67,12 @@ def detect_intent_llm(query, state, llm):
         for c in reversed(context)
     ])
 
-    prompt = f"""
-You are a financial assistant.
-
-Determine the user's intent.
-
+    prompt = f"""You are a financial assistant.Determine the user's intent.
 -------------------------
 CONTEXT
 -------------------------
 Recent conversation:
 {context_text}
-
 User profile:
 - Risk: {profile.get("risk")}
 - Goal: {profile.get("goal")}
@@ -90,7 +83,6 @@ User profile:
 INTENTS
 -------------------------
 Return ONLY one:
-
 - advice → general question
 - allocation → portfolio / fund suggestion
 - projection → returns / future value
@@ -100,64 +92,44 @@ Return ONLY one:
 - general_news → news only
 
 RULES (strict priority):
-
 1. execution  
 User wants to proceed/continue  
 ("yes", "go ahead", "start", "next step") → execution
-
 2. modify  
 User explicitly changes profile  
 (risk, goal, amount, investment type) → modify
-
 3. projection  
 Asks about returns, growth, future value, inflation, or goal sufficiency → projection
-
 4. advice  
 - timing decisions (invest now vs wait)  
 - vague preferences (safe, balanced, less risk)  
 - incomplete inputs (only amount or unclear goal)  
 - macro uncertainty (inflation, volatility, economy without clear allocation ask)  
 → advice
-
 5. news_invest  
 ONLY if user explicitly asks for investment decisions BASED ON  
 market trends / economy / sector
-
 - Must indicate dependency on external conditions  
   (e.g., "based on current market", "which sectors are good now")
-
 - Generic mentions (inflation, volatility, uncertainty) → advice  
-
 If personal profile context present → allocation
-
 6. allocation  
-
 If query contains conflicting constraints:
    (high return + low/zero risk, safety + high growth)
 → allocation
-
 If ANY of below:
-
 - user EXPLICITLY asks for:
   "allocate", "split", "portfolio", "mix", "funds"
-
 -user asks HOW to invest AND provides ANY personal context:
-   (risk OR goal)
-→ allocation
-
+   (risk OR goal)→ allocation
 - OR allocation + projection combined
-
 Otherwise → advice
-
 7. general_news  
 News only, no investment decision
-
 8. advice
-
 If query contains STRICT conflicting constraints:
    (high/guaranteed returns + zero/no risk)
 → allocation
-
 If user expresses balanced preference:
    (good returns + low risk, safe + decent returns)
 → advice
@@ -165,9 +137,7 @@ If user expresses balanced preference:
 USER QUERY
 -------------------------
 {query}
-
-Answer ONLY one word.
-"""
+Answer ONLY one word."""
 
     res = llm.invoke(prompt)
     intent = res.content.strip().lower()

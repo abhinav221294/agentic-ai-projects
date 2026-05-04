@@ -111,10 +111,9 @@ def rag_agent(state: AgentState) -> AgentState:
     # -------------------------
     # LLM GENERATION
     # -------------------------
-    llm = get_llm(temperature=0.3, max_tokens=1000)
+    llm = get_llm(temperature=0.1, max_tokens=1000)
 
     final_prompt = f"""{RAG_PROMPT}
-
 IMPORTANT:
 - First explain simply, then add details if needed
 - Use context as primary source
@@ -123,18 +122,13 @@ IMPORTANT:
 - Do NOT say "no information found" if you can reasonably answer
 - Avoid copying raw text
 - If the question is similar to a previous one, rephrase the explanation instead of repeating
-
 This may be a follow-up question. Use previous conversation to infer meaning.
-
 Conversation:
 {conversation}
-
 Question:
 {query}
-
 Context:
-{context}
-"""
+{context}"""
 
     try:
         response = llm.invoke(final_prompt)
