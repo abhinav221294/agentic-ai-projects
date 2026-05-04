@@ -13,8 +13,6 @@ load_dotenv()
 
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
-
-
 # -------------------------
 # ENV VALIDATION (startup)
 # -------------------------

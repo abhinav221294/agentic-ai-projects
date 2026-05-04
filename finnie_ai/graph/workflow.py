@@ -144,7 +144,13 @@ def __build_workflow():
 # -------------------------
 # APP INSTANCE
 # -------------------------
-app = __build_workflow()
+app = None
+
+def get_app():
+    global app
+    if app is None:
+        app = __build_workflow()
+    return app
 
 
 # -------------------------
@@ -152,6 +158,7 @@ app = __build_workflow()
 # -------------------------
 def run_workflow(state: dict):
     state.setdefault("trace", [])
+    state.setdefault("cache", {})
     # Ensure profile exists
     if "profile" not in state:
         state["profile"] = {
@@ -164,7 +171,8 @@ def run_workflow(state: dict):
     if "thread_id" not in state:
         state["thread_id"] = str(uuid.uuid4())
 
-    result = app.invoke(
+    workflow_app = get_app()
+    result = workflow_app.invoke(
     state,
     config={
         "recursion_limit": 10,
@@ -186,7 +194,8 @@ def run_workflow(state: dict):
         "query": state.get("query"),
         "assistant": result.get("answer"),
         "stage": result.get("stage"),
-        "agent": result.get("agent")
+        "agent": result.get("agent"),
+        "selected_funds": result.get("selected_funds") or state.get("selected_funds")
     })
 
     # ✅ Return response
@@ -199,5 +208,6 @@ def run_workflow(state: dict):
         "confidence": result.get("confidence"),
         "profile": result.get("profile", {}),
         "stage": result.get("stage"),
-        "memory": state.get("memory", [])   # optional but useful
+        "memory": state.get("memory", []),   # optional but useful
+        "selected_funds": result.get("selected_funds") or state.get("selected_funds"),
     }

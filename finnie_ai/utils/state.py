@@ -39,5 +39,6 @@ class AgentState(TypedDict, total=False):
     market_context: Optional[str]
     news_context: Optional[str]
 
-    last_intent: Optional[str]
+    intent: Optional[str]
     active_asset: Optional[str]
+    cache: Optional[Dict]

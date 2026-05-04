@@ -2,11 +2,11 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import time
-from tools.summarize_portfolio import analyze_portfolio
+from tools.summarize_llm import analyze_portfolio
 from utils.price_utils import get_price
 from utils.fx_currency import get_usd_to_inr
 from utils.stock_mapper import normalize_stock
-import json
+
 
 ASSET_RISK_MAP = {
     "Stock": 0.8,

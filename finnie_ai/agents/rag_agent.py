@@ -1,9 +1,10 @@
-from tools.rag_pipeline import RAGPipeline
 from utils.state import AgentState
 from utils.llm import get_llm
 from utils.prompts import RAG_PROMPT
 import time
-from utils.rag_loader import rag
+from utils.rag_loader import get_rag_instance
+from utils.state_utils import set_state
+
 
 def relevance_boost(r, query):
     content = r.get("content", "").lower()
@@ -14,24 +15,10 @@ def relevance_boost(r, query):
 # -------------------------
 # CENTRAL RESPONSE SETTER
 # -------------------------
-def _set(state, start, answer, confidence, source, extra=None):
-    state["answer"] = answer
-    state["agent"] = "rag_agent"
-    state["confidence"] = confidence
-    state["source"] = source
-    state["decision_source"] = "tool"
-    state["answer_source"] = "rag"
-    state["execution_time"] = round(time.time() - start, 2)
-
-    if extra:
-        state.update(extra)
-
-    return state
-
 
 def rag_agent(state: AgentState) -> AgentState:
     start = time.time()
-
+    rag = get_rag_instance()
     tools = state.setdefault("tools_used", [])
     if "rag_pipeline" not in tools:
         tools.append("rag_pipeline")
@@ -51,11 +38,15 @@ def rag_agent(state: AgentState) -> AgentState:
     # NO RESULTS
     # -------------------------
     if not results:
-        return _set(
-            state, start,
-            "I couldn't find strong information in the documents. You can try rephrasing your question or ask something more specific.",
-            0.5,
-            []
+        return set_state(
+            state,
+            start,
+            answer="I couldn't find strong information in the documents. You can try rephrasing your question or ask something more specific.",
+            agent="rag_agent",
+            confidence=0.5,
+            decision_source="tool",
+            answer_source="rag",
+            trace_action="no_results"
         )
 
     # -------------------------
@@ -86,8 +77,8 @@ def rag_agent(state: AgentState) -> AgentState:
     else:
         dynamic_threshold = 0.5
 
-    filtered_results = [r for r in unique_results if r.get("score", 1.0) <= dynamic_threshold]
-
+    filtered_results = [r for r in unique_results if r.get("score", 0) >= dynamic_threshold]    
+    
     if not filtered_results:
         filtered_results = unique_results[:1]
 
@@ -97,12 +88,16 @@ def rag_agent(state: AgentState) -> AgentState:
     context = "\n\n".join([r.get("content", "") for r in filtered_results])
 
     if len(context.strip()) < 50:
-        return _set(
-            state, start,
-            "I couldn't find strong information in the documents. You can try rephrasing your question or ask something more specific.",
-            0.5,
-            []
-        )
+        return set_state(
+            state,
+            start,
+            answer="I couldn't find strong information in the documents. You can try rephrasing your question or ask something more specific.",
+            agent="rag_agent",
+            confidence=0.5,
+            decision_source="tool",
+            answer_source="rag",
+            trace_action="weak_context"
+        )       
 
     # -------------------------
     # MEMORY
@@ -111,7 +106,7 @@ def rag_agent(state: AgentState) -> AgentState:
 
     conversation = ""
     for m in memory[-3:]:
-        conversation += f"\nUser: {m.get('user', '')}\nAssistant: {m.get('assistant', '')}\n"
+       conversation += f"\nUser: {m.get('query', '')}\nAssistant: {m.get('assistant', '')}\n"
 
     # -------------------------
     # LLM GENERATION
@@ -121,10 +116,13 @@ def rag_agent(state: AgentState) -> AgentState:
     final_prompt = f"""{RAG_PROMPT}
 
 IMPORTANT:
+- First explain simply, then add details if needed
 - Use context as primary source
 - If context is weak or incomplete, use general knowledge to help
 - If this is a follow-up question, continue from previous answer
 - Do NOT say "no information found" if you can reasonably answer
+- Avoid copying raw text
+- If the question is similar to a previous one, rephrase the explanation instead of repeating
 
 This may be a follow-up question. Use previous conversation to infer meaning.
 
@@ -156,9 +154,23 @@ Context:
     if show_source:
         answer += "\n\n📚 Based on internal documents."
 
-    return _set(
-        state, start,
-        answer,
-        0.9 if show_source else 0.5,
-        combined_sources if show_source else []
+    
+    extra={
+    "rag_sources": combined_sources[:5],
+    "rag_used_sources": show_source,
+    "rag_context_length": len(context),
+    "rag_chunks_used": len(filtered_results),
+    "rag_confidence_reason": "context_used" if show_source else "fallback_generation"
+    }
+
+    return set_state(
+        state,
+        start,
+        answer=answer,
+        agent="rag_agent",
+        confidence=0.9 if show_source else 0.5,
+        decision_source="tool",
+        answer_source="rag",
+        trace_action="generate",
+        extra=extra
     )

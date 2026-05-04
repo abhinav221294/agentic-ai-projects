@@ -13,8 +13,8 @@ def get_price(symbol):
 
         # ✅ Use Finnhub for US stocks
         price_data = get_finnhub_price(symbol)
-        if price_data:
-            return price_data.get("current")
+        if price_data and price_data.get("current"):
+            return price_data["current"]
 
         return None
 

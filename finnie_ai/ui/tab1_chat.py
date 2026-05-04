@@ -3,7 +3,11 @@ import time
 import re
 import copy
 
-from graph.workflow import run_workflow
+try:
+    from graph.workflow import run_workflow
+except Exception as e:
+    run_workflow = None
+    print("❌ Workflow import failed:", e)
 
 
 def render_chat_tab(state):
@@ -11,7 +15,6 @@ def render_chat_tab(state):
     if run_workflow is None:
         st.error("Workflow not initialized properly")
         return
-    print("LOADING TAB1_CHAT")
     # -------------------------------
     # Init
     # -------------------------------
@@ -160,13 +163,21 @@ def render_chat_tab(state):
             if m.get("stage"):
                 last_stage = m["stage"]
                 break
+        last_funds = None
+
+        for m in reversed(state["memory"]):
+            if m.get("selected_funds"):
+                last_funds = m["selected_funds"]
+                break
 
         result = run_workflow({
         "query": q,
         "memory": memory_snapshot,
         "profile": last_profile,   # ✅ THIS IS THE FIX
-        "stage": last_stage 
+        "stage": last_stage,
+        "selected_funds": last_funds
         })
+        state["selected_funds"] = result.get("selected_funds", last_funds)
 
         answer = result.get("answer")
 
@@ -182,6 +193,7 @@ def render_chat_tab(state):
         state["memory"][-1]["trace"] = result.get("trace", [])
         state["memory"][-1]["profile"] = result.get("profile", {})
         state["memory"][-1]["stage"] = result.get("stage")
+        state["memory"][-1]["selected_funds"] = state.get("selected_funds")
         
         state.update({
             "profile": result.get("profile", state.get("profile")),

@@ -87,6 +87,8 @@ STOCK_MAP = {
 #    symbol = symbol.upper().strip()
 #    return STOCK_MAP.get(symbol, symbol)
 
+TICKER_TO_NAME = { "TCS.NS": "Tata Consultancy Services", "INFY.NS": "Infosys", "RELIANCE.NS": "Reliance Industries", "HDFCBANK.NS": "HDFC Bank", "ICICIBANK.NS": "ICICI Bank", "SBIN.NS": "State Bank of India", }
+
 
 def normalize_stock(symbol: str) -> str:
     symbol = symbol.upper().strip()

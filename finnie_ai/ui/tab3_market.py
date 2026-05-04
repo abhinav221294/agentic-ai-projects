@@ -23,11 +23,31 @@ def render_market_tab(state):
 
                 if data.empty:
                     raise Exception("No data")
+                
+                currency = "₹" if symbol.endswith(".NS") else "$"
+                display_name = symbol.replace(".NS", "")
+                # ✅ ADD THIS BLOCK HERE
+                if len(data) < 2:
+                    latest = data["Close"].iloc[-1]
+
+                    st.subheader(f"{display_name} Price Trend (Last 1 Month)")
+                    st.caption(f"Prices shown in {currency}")
+
+                    st.line_chart(data["Close"], use_container_width=True)
+
+                    st.metric(
+                            label=f"{display_name} Price",
+                            value=f"{round(latest,2):,.2f}"
+                        )
+
+                    st.warning("⚠️ Not enough data to calculate trend")
+                    return
+
 
                 # -------------------------
                 # EXISTING CHART
                 # -------------------------
-                st.line_chart(data["Close"])
+                st.line_chart(data["Close"], use_container_width=True)
 
                 latest = data["Close"].iloc[-1]
                 prev_day = data["Close"].iloc[-2]
@@ -37,10 +57,12 @@ def render_market_tab(state):
                 
                 memory = state.setdefault("memory", [])
 
+                price_text = round(latest, 2) if latest is not None else "N/A"
+
                 if not memory or memory[-1].get("query") != stock_input:
                     memory.append({
                     "query": stock_input,
-                    "assistant": f"{symbol} price is {round(latest, 2)}",
+                    "assistant": f"{symbol} price is {price_text}",
                     "agent": "market_tab",
                     "stage": "market"
                     })
@@ -85,18 +107,18 @@ def render_market_tab(state):
                 if change > 0:
                     st.success("📈 Stock is UP compared to yesterday")
                 else:
-                    st.error("📉 Stock is DOWN compared to yesterday")
+                    st.warning("📉 Stock is down compared to yesterday")
 
                 st.caption("📊 Based on last 1 month data")
 
                 # Trend classification
                 if abs(percent_change) < 1:
-                    trend = "sideways"
+                    trend = "➡️ Sideways"
                 elif percent_change > 0:
-                    trend = "uptrend"
+                    trend = "📈 Uptrend"
                 else:
-                    trend = "downtrend"
-
+                    trend = "📉 Downtrend"
+                    
                 # Risk logic (simple version)
                 symbol_lower = symbol.lower()
 
@@ -161,15 +183,17 @@ Output should be a single short paragraph.
                 current_price = get_price(symbol)
                 memory = state.setdefault("memory", [])
 
+                price_text = round(current_price, 2) if current_price is not None else "N/A"
+
                 if not memory or memory[-1].get("query") != stock_input:
                     memory.append({
                     "query": stock_input,
-                    "assistant": f"{symbol} price is {round(current_price, 2)}",
+                    "assistant": f"{symbol} price is {price_text}",
                     "agent": "market_tab",
                     "stage": "market"
                     })
 
-                if current_price:
+                if current_price is not None:
                     state.update({
                     "market_symbol": symbol,
                     "market_price": round(current_price, 2),
