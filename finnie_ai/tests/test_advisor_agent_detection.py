@@ -131,27 +131,57 @@ def compare_agents(predicted, expected):
 def run_agent_tests(detect_agents_fn, state, llm):
     correct = 0
 
+    total_tp = 0
+    total_fp = 0
+    total_fn = 0
+
     for i, case in enumerate(test_cases, 1):
         query = case["query"]
         intent = case["intent"]
-        expected = case["expected_agents"]
+        expected = set(case["expected_agents"])
 
         state["query"] = query
 
-        predicted = detect_agents_fn(query, state, intent, llm)
+        predicted = set(detect_agents_fn(query, state, intent, llm))
 
-        result = "✅" if compare_agents(predicted, expected) else "❌"
+        result = "✅" if predicted == expected else "❌"
 
         print(f"{i}. {result}")
         print(f"Query: {query}")
         print(f"Intent: {intent}")
-        print(f"Expected: {expected}")
-        print(f"Predicted: {predicted}\n")
+        print(f"Expected: {list(expected)}")
+        print(f"Predicted: {list(predicted)}\n")
 
-        if compare_agents(predicted, expected):
+        # Accuracy
+        if predicted == expected:
             correct += 1
 
-    print(f"\nAccuracy: {correct}/{len(test_cases)}")
+        # Metrics calculation
+        tp = len(predicted & expected)
+        fp = len(predicted - expected)
+        fn = len(expected - predicted)
+
+        total_tp += tp
+        total_fp += fp
+        total_fn += fn
+
+    # Final metrics
+    accuracy = correct / len(test_cases)
+
+    precision = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0
+    recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0
+
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if (precision + recall) > 0 else 0
+    )
+
+    print("\n====================")
+    print(f"Accuracy : {correct}/{len(test_cases)} = {accuracy:.2f}")
+    print(f"Precision: {precision:.2f}")
+    print(f"Recall   : {recall:.2f}")
+    print(f"F1 Score : {f1:.2f}")
+    print("====================")
 
 
 if __name__ == "__main__":
