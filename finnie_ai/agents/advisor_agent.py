@@ -157,12 +157,17 @@ def detect_agents_llm(query, state, intent, llm):
     prompt = f"""
 You are a STRICT tool selector for a financial advisor system.
 
-Your job is to return ONLY the exact agents required.
-Do NOT over-select agents.
+Return ONLY the exact agents required for the query.
 
--------------------------
+Do NOT over-select agents.
+Do NOT under-select agents.
+
+Agents are NOT mutually exclusive.
+If multiple independent signals exist, return ALL relevant agents.
+
+--------------------------------------------------
 INPUT
--------------------------
+--------------------------------------------------
 Query: {query}
 Intent: {intent}
 
@@ -172,136 +177,195 @@ User Profile:
 - Investment: {profile.get("investment_type")}
 - Amount: {profile.get("amount")}
 
--------------------------
+--------------------------------------------------
 AVAILABLE AGENTS
--------------------------
-- market_agent → stocks, companies, sectors, stock-specific decisions
-- news_agent → economic trends, timing decisions, macro conditions
-- risk_agent → user confusion or uncertainty about risk
-- rag_agent → explanation (why, reasoning, concepts)
+--------------------------------------------------
 
--------------------------
-STRICT DECISION RULES
--------------------------
+- market_agent
+  Use for:
+  - stocks
+  - companies
+  - sectors
+  - equities
+  - investment products
+  - investment choices
+  - stock performance
 
-PRIORITY ORDER (VERY IMPORTANT):
-risk_agent > rag_agent > market_agent > news_agent
+- news_agent
+  Use for:
+  - economic conditions
+  - inflation
+  - recession
+  - interest rates
+  - macro trends
+  - current market conditions
+  - market uncertainty
+  - timing decisions
 
-Always resolve conflicts using this order.
+- risk_agent
+  Use for:
+  - risk tolerance
+  - uncertainty about risk
+  - conflicting risk preferences
+  - safety vs returns
+  - investment suitability by risk profile
 
----
+- rag_agent
+  Use for:
+  - explanations
+  - reasoning
+  - conceptual understanding
+  - impact analysis
 
-1. RISK AGENT (HIGHEST PRIORITY)
-Use ONLY if the confusion is explicitly about risk (risk tolerance, safety vs returns, how much risk)
+--------------------------------------------------
+DECISION RULES
+--------------------------------------------------
 
-Do NOT use for general uncertainty like:
-- "should I invest now or wait"
-- "what should I do"
+1. MARKET AGENT
 
-IMPORTANT:
-- Even if the word "understand" is used, if it refers to risk → use risk_agent (NOT rag_agent)
-- If risk is already clearly defined (e.g., moderate risk) AND no confusion → DO NOT use
-
----
-
-2. RAG AGENT
-Use ONLY if the user asks for explanation or reasoning:
-
-Examples:
-- "why"
-- "explain"
-- "reason"
-- "understand" (ONLY when NOT about risk)
-
----
-
-3. MARKET AGENT
-Use if query is about:
+Use market_agent when the query involves:
 - stocks
 - companies
 - sectors
+- equities
+- investment products
+- investment choices
 - stock performance
-- specific investment choices like "tech stocks"
 
-IMPORTANT:
-- If the question is about WHETHER to invest in stocks → use market_agent
-- Do NOT add news_agent unless trends/timing are the MAIN focus
-ALSO use market_agent if the user asks "where should I invest" or "what should I invest in"
----
+Also use for:
+- suitable investments
+- where should I invest
+- investments matching risk profile
 
-4. NEWS AGENT
-Use if the query includes ANY of the following as a PRIMARY or SUPPORTING signal:
+Do NOT use for:
+- generic allocation advice
+- broad portfolio diversification
+WITHOUT specific investment choices.
 
-- "market trends"
-- "current market conditions"
-- "economic changes"
-- "global trends"
-- timing decisions (now vs later)
+--------------------------------------------------
 
-IMPORTANT:
+2. NEWS AGENT
 
-- "current market conditions" ALWAYS triggers news_agent
-- "market trends" triggers news_agent UNLESS it is only used to justify a specific stock decision
+Use news_agent for:
+- economic uncertainty
+- inflation
+- recession
+- macro trends
+- market conditions
+- timing decisions
+- invest now vs later
 
-Example:
-- "Should I invest in tech stocks given market trends?" → market_agent ONLY
-- "Given current market conditions, where should I invest?" → market_agent + news_agent
-- Timing decisions (now vs later, invest vs wait) ALWAYS trigger news_agent
-Also use risk_agent if the user expresses conflicting risk preferences:
-
-Examples:
-- "aggressive but safe"
-- "high returns but low risk"
-- "want returns but also safety"
-
-These indicate unclear or contradictory risk tolerance.
----
-
-5. MARKET + NEWS (COMBINATION)
-Use BOTH only if the query clearly requires:
-- stock/market decision
+Do NOT use news_agent when:
+- trends/timing are only supporting context
 AND
-- trends/timing as a core part of the question
+- the main task is stock/company selection.
+Do NOT use news_agent for stock/company performance explanations
+unless macro/economic conditions are explicitly mentioned.
+
+--------------------------------------------------
+
+3. RISK AGENT
+
+Use risk_agent when:
+- the user is uncertain about risk
+- the query involves risk tolerance
+- the user asks for investments matching risk profile
+- the query discusses safety vs returns
+- the user expresses conflicting preferences
 
 Examples:
-- "based on current market and news"
-- "trends and stock performance"
-- "current market conditions"
+- high returns but low risk
+- aggressive growth but safety
 
-SPECIAL CASE:
+Do NOT use when:
+- the user already specifies a stable risk profile
+AND
+- there is no uncertainty/conflict.
+Always include risk_agent when the query explicitly mentions risk tolerance or risk profile.
 
-If the query is about a specific stock decision (e.g., "tech stocks"),
-AND "market trends" is only supporting context,
-→ use ONLY market_agent (do NOT add news_agent)
+--------------------------------------------------
 
----
+4. RAG AGENT
 
-6. DEFAULT
-- If general allocation or portfolio advice → return []
-- Do NOT guess missing information
-- Do NOT add extra agents
+Use rag_agent for:
+- explanations
+- reasoning
+- conceptual understanding
+- impact analysis
+- tradeoff explanations
+- comparison questions
 
-IMPORTANT COMBINATION RULE:
+Keywords:
+- why
+- explain
+- reasoning
+- how
+- impact
+- better than
 
-If the query contains multiple independent signals, include ALL relevant agents.
+Do NOT use rag_agent for:
+- personal risk tolerance assessment
+- uncertainty about risk appetite
+- conflicting safety vs returns preferences
+- understanding personal risk tolerance
+- uncertainty about how much risk to take
+- Queries about understanding personal risk tolerance
+should use risk_agent only.
+- Do NOT use rag_agent for practical risk-management guidance alone.
 
-- risk + trends → ["risk_agent", "news_agent"]
-- market decision + current conditions → ["market_agent", "news_agent"]
+--------------------------------------------------
 
-Do NOT suppress lower priority agents if they add meaningful context.
-If risk_agent is selected AND the query includes trends or market conditions,
-you MUST also include news_agent.
+5. MULTI-AGENT RULE
 
--------------------------
-OUTPUT FORMAT (STRICT JSON)
--------------------------
-Return ONLY:
+If multiple independent signals exist,
+return ALL relevant agents.
 
-["agent1", "agent2"]
+--------------------------------------------------
+
+6. DEFAULT RULE
+
+Return [] for:
+- generic investment advice
+- broad diversification questions
+- allocation-only queries
+WITHOUT:
+- stock selection
+- macro/timing discussion
+- explanation requests
+- risk confusion
+
+--------------------------------------------------
+FEW-SHOT EXAMPLES
+--------------------------------------------------
+
+Query: "Based on market trends and news, what investments suit my risk level?"
+Output: ["market_agent", "news_agent", "risk_agent"]
+
+Query: "Given economic uncertainty, explain how I should manage investment risk"
+Output: ["risk_agent", "news_agent", "rag_agent"]
+
+Query: "Explain which stocks suit my risk profile and why"
+Output: ["market_agent", "risk_agent", "rag_agent"]
+
+Query: "Considering my risk tolerance and current market conditions, where should I invest and why?"
+Output: ["market_agent", "risk_agent", "news_agent", "rag_agent"]
+
+Query: "Things look uncertain, how should I invest?"
+Output: ["news_agent"]
+
+--------------------------------------------------
+OUTPUT FORMAT
+--------------------------------------------------
+
+Return ONLY valid JSON list format.
+
+Examples:
+[]
+["market_agent"]
+["market_agent", "news_agent"]
 
 No explanation.
 """
-
     res = llm.invoke(prompt)
 
     try:
