@@ -375,6 +375,17 @@ class RAGPipeline:
 
         # Remove duplicates
         reranked = deduplicate(reranked)
+        
+        print("\n=== RETRIEVAL DEBUG ===")
+
+        for r in reranked:
+            print({
+        "score": r["score"],
+        "source": r["source_file_name"],
+        "preview": r["content"][:100]
+            })
+
+        print("Top confidence:", reranked[0]["confidence"] if reranked else None)
 
         if not reranked or reranked[0]["confidence"] < 0.35:
             return []

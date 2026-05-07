@@ -36,7 +36,7 @@ def news_agent(state: AgentState) -> AgentState:
         results = client.search(
             query=query,
             topic="news",
-            max_results=5
+            max_results=3
         )
 
         articles = results.get("results", [])
@@ -77,7 +77,7 @@ def news_agent(state: AgentState) -> AgentState:
             url = article.get("url", "")
             content = article.get("content") or article.get("snippet") or ""
 
-            summary = summarize_article(content[:2000]) if content else "Summary not available."
+            summary = summarize_article(content[:1200]) if content else "Summary not available."
 
             processed_articles.append({
                 "title": title,

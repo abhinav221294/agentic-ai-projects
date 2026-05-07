@@ -189,14 +189,14 @@ def run_workflow(state: dict):
             "trace": state.get("trace", [])
         }
 
-    # 🔥 ADD MEMORY HERE (THIS IS THE SPOT)
-    state.setdefault("memory", []).append({
-        "query": state.get("query"),
-        "assistant": result.get("answer"),
-        "stage": result.get("stage"),
-        "agent": result.get("agent"),
-        "selected_funds": result.get("selected_funds") or state.get("selected_funds")
-    })
+    ## 🔥 ADD MEMORY HERE (THIS IS THE SPOT)
+    #state.setdefault("memory", []).append({
+    #    "query": state.get("query"),
+    #    "assistant": result.get("answer"),
+    #    "stage": result.get("stage"),
+    #    "agent": result.get("agent"),
+    #    "selected_funds": result.get("selected_funds") or state.get("selected_funds")
+    #})
 
     # ✅ Return response
     return {
@@ -210,4 +210,5 @@ def run_workflow(state: dict):
         "stage": result.get("stage"),
         "memory": state.get("memory", []),   # optional but useful
         "selected_funds": result.get("selected_funds") or state.get("selected_funds"),
+        "expected_next_input": result.get("expected_next_input")
     }

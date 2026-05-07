@@ -202,11 +202,13 @@ def market_agent(state: AgentState) -> AgentState:
     # -------------------------
     try:
         # Create session with headers (prevents blocking)
-        session = requests.Session()
-        session.headers.update({"User-Agent": "Mozilla/5.0"})
+        #session = requests.Session()
+        #session.headers.update({"User-Agent": "Mozilla/5.0"})
 
         # Fetch stock object
-        stock = yf.Ticker(symbol, session=session)
+        stock = yf.Ticker(symbol)
+                          
+        #session=session)
 
         if not symbol:
             return set_state(

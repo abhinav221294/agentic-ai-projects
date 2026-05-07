@@ -140,6 +140,33 @@ def router_agent(state: AgentState) -> AgentState:
     # Build contextual prompt
     context = build_context(state)
 
+    expected = state.get("expected_next_input")
+
+    if expected:
+
+        profile = state.get("profile", {})
+
+        still_missing = {
+        "risk": not profile.get("risk"),
+        "goal": not profile.get("goal"),
+        "investment_type": not profile.get("investment_type"),
+        "amount": profile.get("amount") is None
+        }
+
+        # Continue onboarding ONLY if field is still missing
+        if still_missing.get(expected):
+
+            return set_state(
+             state,
+            category="advisor",
+            confidence=0.99,
+            decision_source="state_continuation",
+            update_memory=False
+            )
+
+        else:
+            # cleanup stale continuation state
+            state.pop("expected_next_input", None)
     
     # -------------------------
     # FOLLOW-UP ROUTING

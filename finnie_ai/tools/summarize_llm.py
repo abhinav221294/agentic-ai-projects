@@ -1,6 +1,11 @@
 # Import LLM utility function to initialize the language model
 from utils.llm import get_llm
 
+llm = get_llm(
+    temperature=0.1,
+    max_tokens=220
+    )
+
 def analyze_portfolio(payload: dict) -> str:
     """
     Analyzes a user's investment portfolio using an LLM.
@@ -28,7 +33,7 @@ def analyze_portfolio(payload: dict) -> str:
     # -------------------------
     # Initialize LLM with default configuration
     # (temperature, model, etc. handled inside get_llm)
-    llm = get_llm()
+  
 
     # -------------------------
     # PROMPT CONSTRUCTION
@@ -47,7 +52,7 @@ Provide:
 - Diversification feedback
 - Portfolio weaknesses
 - Clear actionable suggestions
-Keep response concise (120-180 words) and practical."""
+Keep response concise (100-120 words) and practical."""
 
     # -------------------------
     # LLM INVOCATION
@@ -57,13 +62,17 @@ Keep response concise (120-180 words) and practical."""
         response = llm.invoke(prompt)
 
         # Extract text content and remove leading/trailing whitespace
-        return response.content.strip()
+        answer = response.content.strip()
+        answer = " ".join(answer.split())
+
+
+        return answer
 
     # -------------------------
     # ERROR HANDLING
     # -------------------------
-    except:
-        # If LLM call fails (network/API issue), return fallback message
+    except Exception as e:
+        print("Portfolio analysis error:", e)
         return "Portfolio analysis failed."
     
 
@@ -90,17 +99,18 @@ def summarize_article(content: str) -> str:
     # -------------------------
     # Slightly higher temperature for better narrative flow
     # while still maintaining factual consistency
-    llm = get_llm(temperature=0.3)
 
     # -------------------------
     # PROMPT CONSTRUCTION
     # -------------------------
     # Define clear instructions for summarization
-    prompt = f"""Summarize the following news article in 120-180 words.
+    prompt = f"""Summarize the following news article in 60-90 words.
 Focus on:
-- Key event
-- Business/financial impact
-- Important facts
+- Main event
+- Market/business impact
+- Key investor takeaway
+
+Keep concise and practical.
 Article:
 {content}"""
     # -------------------------
@@ -110,12 +120,15 @@ Article:
         # Call LLM with the prompt
         response = llm.invoke(prompt)
 
+        if len(content.split()) < 40:
+            return "Article content too limited for reliable summary."
+        
         # Return cleaned summary text
         return response.content.strip()
 
     # -------------------------
     # ERROR HANDLING
     # -------------------------
-    except:
-        # Return fallback message if summarization fails
+    except Exception as e:
+        print("Summary generation error:", e)
         return "Summary generation failed."

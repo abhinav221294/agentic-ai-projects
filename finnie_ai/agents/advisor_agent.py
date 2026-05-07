@@ -12,7 +12,8 @@ from utils.llm import get_llm
 from utils.finance_constants import (ALLOCATION_MAP,MAX_LIMITS,
 FUND_SUGGESTIONS)
 from utils.fund_utils import extract_user_allocation,merge_allocation
-from utils.format_utils import alloc
+from utils.format_utils import (alloc,extract_amount,extract_rate,
+extract_projection_duration, extract_age)
 from utils.calculation_utils import calculate_lumpsum_future_value,calculate_sip_future_value
 from utils.state_utils import set_state
 from utils.parsing_utils import normalize_term
@@ -47,18 +48,26 @@ load_dotenv()
 # Allocation mapping
 
 
-def detect_intent_llm(query, state, llm):
+def detect_remaining_intent(query, state, llm):
+
     memory = state.get("memory", [])
     profile = state.get("profile", {})
 
-    # last 1–2 turns
+    # =====================================================
+    # RECENT CONTEXT
+    # =====================================================
+
     context = []
+
     for m in reversed(memory):
+
         if m.get("assistant"):
+
             context.append({
                 "query": m.get("query"),
                 "intent": m.get("intent")
             })
+
         if len(context) == 2:
             break
 
@@ -67,85 +76,437 @@ def detect_intent_llm(query, state, llm):
         for c in reversed(context)
     ])
 
-    prompt = f"""You are a financial assistant.Determine the user's intent.
--------------------------
+    # =====================================================
+    # PROMPT
+    # =====================================================
+
+    prompt = f"""You are a STRICT financial intent classifier.
+
+Your task:
+Return ONLY the single best intent.
+
+No explanation.
+No sentence.
+Only one word.
+
+--------------------------------------------------
+IMPORTANT
+--------------------------------------------------
+
+execution, modify, and projection intents
+have ALREADY been handled earlier.
+
+DO NOT return:
+- execution
+- modify
+- projection
+
+--------------------------------------------------
 CONTEXT
--------------------------
+--------------------------------------------------
+
 Recent conversation:
 {context_text}
+
 User profile:
 - Risk: {profile.get("risk")}
 - Goal: {profile.get("goal")}
 - Investment: {profile.get("investment_type")}
 - Amount: {profile.get("amount")}
 
--------------------------
-INTENTS
--------------------------
-Return ONLY one:
-- advice → general question
-- allocation → portfolio / fund suggestion
-- projection → returns / future value
-- execution → proceed / go ahead
-- modify → user updates profile (risk, goal, amount)
-- news_invest → investing based on market/news
-- general_news → news only
+--------------------------------------------------
+VALID INTENTS
+--------------------------------------------------
 
-RULES (strict priority):
-1. execution  
-User wants to proceed/continue  
-("yes", "go ahead", "start", "next step") → execution
-2. modify  
-User explicitly changes profile  
-(risk, goal, amount, investment type) → modify
-3. projection  
-Asks about returns, growth, future value, inflation, or goal sufficiency → projection
-4. advice  
-- timing decisions (invest now vs wait)  
-- vague preferences (safe, balanced, less risk)  
-- incomplete inputs (only amount or unclear goal)  
-- macro uncertainty (inflation, volatility, economy without clear allocation ask)  
-→ advice
-5. news_invest  
-ONLY if user explicitly asks for investment decisions BASED ON  
-market trends / economy / sector
-- Must indicate dependency on external conditions  
-  (e.g., "based on current market", "which sectors are good now")
-- Generic mentions (inflation, volatility, uncertainty) → advice  
-If personal profile context present → allocation
-6. allocation  
-If query contains conflicting constraints:
-   (high return + low/zero risk, safety + high growth)
+- advice
+  General financial guidance
+
+- allocation
+  Portfolio allocation / investment suggestions
+
+- news_invest
+  Investment decisions based on market/economy/news
+
+- general_news
+  News or market information only
+
+--------------------------------------------------
+DECISION RULES
+--------------------------------------------------
+
+IMPORTANT:
+Apply rules TOP TO BOTTOM.
+Use FIRST matching rule only.
+
+--------------------------------------------------
+1. NEWS_INVEST
+--------------------------------------------------
+
+ONLY return news_invest if the query EXPLICITLY mentions:
+- market
+- economy
+- inflation
+- trends
+- sectors
+- interest rates
+- news
+- macro conditions
+
+AND user asks:
+- where should I invest
+- what sectors are good
+- what investments are best now
+
+Examples:
+- where should I invest based on current market
+- best sectors during inflation
+- what investments suit current economy
+
+Return: news_invest
+
+IMPORTANT:
+If query is ONLY asking about news/info
+WITHOUT investment decision:
+DO NOT use news_invest.
+
+--------------------------------------------------
+2. GENERAL_NEWS
+--------------------------------------------------
+
+Return general_news IF:
+query asks ONLY about:
+- market news
+- economy
+- inflation
+- sectors
+- trends
+- stocks/news updates
+
+WITHOUT asking for investment advice.
+
+Examples:
+- how is the market doing
+- latest AI stock trends
+- what is happening in tech sector
+
+Return: general_news
+
+--------------------------------------------------
+3. ALLOCATION
+--------------------------------------------------
+
+Return allocation IF:
+user asks:
+- how to invest
+- portfolio suggestion
+- fund recommendation
+- allocation strategy
+- diversification
+- asset split
+
+OR user provides:
+- risk
+- goal
+- investment preference
+
+AND wants investment suggestions.
+
+Examples:
+- suggest portfolio
+- where should I invest
+- recommend funds
+- diversify my investments
+- medium risk investment plan
+
+Return: allocation
+
+--------------------------------------------------
+4. ADVICE
+--------------------------------------------------
+
+Return advice for:
+- vague financial concerns
+- balanced/safe preferences
+- timing uncertainty
+- incomplete information
+- general guidance
+
+Examples:
+- should I invest now or wait
+- I want safety and returns
+- markets look uncertain
+- I am confused about investing
+
+Return: advice
+
+--------------------------------------------------
+SPECIAL RULES
+--------------------------------------------------
+
+STRICT conflicting constraints:
+- guaranteed high returns
+- zero risk high growth
+- double money safely quickly
+
 → allocation
-If ANY of below:
-- user EXPLICITLY asks for:
-  "allocate", "split", "portfolio", "mix", "funds"
--user asks HOW to invest AND provides ANY personal context:
-   (risk OR goal)→ allocation
-- OR allocation + projection combined
-Otherwise → advice
-7. general_news  
-News only, no investment decision
-8. advice
-If query contains STRICT conflicting constraints:
-   (high/guaranteed returns + zero/no risk)
-→ allocation
-If user expresses balanced preference:
-   (good returns + low risk, safe + decent returns)
+
+Balanced preference:
+- safe and decent returns
+- good returns with low risk
+
 → advice
--------------------------
+
+Single-word followups:
+- use conversation context
+
+Examples:
+- growth
+- SIP
+
+--------------------------------------------------
 USER QUERY
--------------------------
+--------------------------------------------------
+
 {query}
-Answer ONLY one word."""
+
+Return ONLY one intent word."""
+
+    # =====================================================
+    # LLM CALL
+    # =====================================================
 
     res = llm.invoke(prompt)
+
     intent = res.content.strip().lower()
 
-    valid = ["advice", "allocation", "projection", "execution", "modify", "news_invest", "general_news"]
+    market_terms = [
+    "market",
+    "economy",
+    "inflation",
+    "sector",
+    "trend",
+    "interest rate",
+    "news",
+    "macro"
+    ]
+
+    if (
+        intent == "news_invest"
+        and not any(t in query.lower() for t in market_terms)
+    ):
+        intent = "allocation"
+
+    # =====================================================
+    # VALIDATION
+    # =====================================================
+
+    valid = [
+        "advice",
+        "allocation",
+        "news_invest",
+        "general_news"
+    ]
 
     if intent not in valid:
         intent = "advice"
+
+    return intent
+
+
+def detect_intent_llm(query, state, llm):
+
+    """
+    Hierarchical Intent Detection
+
+    STAGE 1:
+    - execution
+    - modify
+    - other
+
+    STAGE 2:
+    - projection
+    - non_projection
+
+    STAGE 3:
+    - allocation
+    - advice
+    - news_invest
+    - general_news
+    """
+
+    memory = state.get("memory", [])
+    profile = state.get("profile", {})
+
+    # =====================================================
+    # RECENT CONTEXT
+    # =====================================================
+
+    context = []
+
+    for m in reversed(memory):
+
+        if m.get("assistant"):
+
+            context.append({
+                "query": m.get("query"),
+                "intent": m.get("intent")
+            })
+
+        if len(context) == 2:
+            break
+
+    context_text = "\n".join([
+        f"- {c['query']} ({c['intent']})"
+        for c in reversed(context)
+    ])
+
+    # =====================================================
+    # STAGE 1
+    # ACTION INTENTS
+    # =====================================================
+
+    stage1_prompt = f"""
+You are a STRICT financial intent classifier.
+
+Your task:
+Return ONLY one word.
+
+VALID OUTPUTS:
+- execution
+- modify
+- other
+
+--------------------------------------------------
+DEFINITIONS
+--------------------------------------------------
+
+execution:
+User wants to proceed/start/continue.
+
+Examples:
+- yes
+- go ahead
+- continue
+- proceed
+- start investment
+- next step
+
+modify:
+User explicitly changes:
+- amount
+- risk
+- goal
+- investment type
+- allocation preference
+
+Examples:
+- increase SIP
+- change risk
+- switch to lump sum
+- reduce equity
+
+other:
+Anything else.
+
+--------------------------------------------------
+CONTEXT
+--------------------------------------------------
+
+Recent conversation:
+{context_text}
+
+User Query:
+{query}
+
+Return ONLY one word.
+"""
+
+    res1 = llm.invoke(stage1_prompt)
+
+    stage1_intent = res1.content.strip().lower()
+
+    if stage1_intent in ["execution", "modify"]:
+
+        print("LLM Intent:", stage1_intent)
+
+        return stage1_intent
+
+    # =====================================================
+    # STAGE 2
+    # PROJECTION DETECTION
+    # =====================================================
+
+    stage2_prompt = f"""
+You are a STRICT financial projection classifier.
+
+Your task:
+Determine whether the user is asking about:
+- future value
+- returns
+- wealth growth
+- corpus estimation
+- long-term investment growth
+
+VALID OUTPUTS:
+- projection
+- non_projection
+
+--------------------------------------------------
+PROJECTION EXAMPLES
+--------------------------------------------------
+
+- what returns can I expect
+- how much wealth can I create
+- future value in 10 years
+- retirement corpus
+- what will this grow to
+- can I reach 5 crore
+
+--------------------------------------------------
+NON-PROJECTION EXAMPLES
+--------------------------------------------------
+
+- suggest portfolio
+- where should I invest
+- should I invest now
+- market news today
+- change risk profile
+
+--------------------------------------------------
+CONTEXT
+--------------------------------------------------
+
+Recent conversation:
+{context_text}
+
+User Query:
+{query}
+
+Return ONLY one word.
+"""
+
+    res2 = llm.invoke(stage2_prompt)
+
+    stage2_intent = res2.content.strip().lower()
+
+    if stage2_intent == "projection":
+
+        print("LLM Intent:", "projection")
+
+        return "projection"
+
+    # =====================================================
+    # STAGE 3
+    # REMAINING INTENTS
+    # =====================================================
+
+    intent = detect_remaining_intent(
+        query=query,
+        state=state,
+        llm=llm
+    )
+
+    print("LLM Intent:", intent)
 
     return intent
 
@@ -154,8 +515,7 @@ def detect_agents_llm(query, state, intent, llm):
     profile = state.get("profile", {})
 
     
-    prompt = f"""
-You are a STRICT tool selector for a financial advisor system.
+    prompt = f"""You are a STRICT tool selector for a financial advisor system.
 
 Return ONLY the exact agents required for the query.
 
@@ -364,8 +724,8 @@ Examples:
 ["market_agent"]
 ["market_agent", "news_agent"]
 
-No explanation.
-"""
+No explanation."""
+    
     res = llm.invoke(prompt)
 
     try:
@@ -377,12 +737,7 @@ No explanation.
 
     return agents
 
-def decide_mode(intent, profile):
-    profile_complete = all([
-        profile.get("risk"),
-        profile.get("goal"),
-        profile.get("investment_type")
-    ])
+def decide_mode(intent, profile_complete):
 
     if not profile_complete:
         return "ask_missing"
@@ -402,19 +757,38 @@ def run_agents(agent_list, state):
     results = {}
 
     if "market_agent" in agent_list:
-        results["market"] = market_agent(state)
+        market_result = market_agent(state)
+
+        if isinstance(market_result, dict):
+            results["market"] = market_result.get("answer", "")
+        else:
+            results["market"] = str(market_result)
 
     if "news_agent" in agent_list:
-        results["news"] = news_agent(state)
+        news_result = news_agent(state)
+
+        if isinstance(news_result, dict):
+            results["news"] = news_result.get("answer", "")
+        else:
+            results["news"] = str(news_result)
 
     if "risk_agent" in agent_list:
-        results["risk"] = risk_agent(state)
+        risk_result = risk_agent(state)
+
+        if isinstance(risk_result, dict):
+            results["risk"] = risk_result.get("answer", "")
+        else:
+            results["risk"] = str(risk_result)
 
     if "rag_agent" in agent_list:
-        results["rag"] = rag_agent(state)
+        rag_result = rag_agent(state)
+
+        if isinstance(rag_result, dict):
+            results["rag"] = rag_result.get("answer", "")
+        else:
+            results["rag"] = str(rag_result)
 
     return results
-
 def advisor_agent(state: AgentState) -> AgentState:
     start = time.time()
    
@@ -423,18 +797,12 @@ def advisor_agent(state: AgentState) -> AgentState:
     #last_msg = memory[-1] if memory else {}
     #raw_query = last_msg.get("user", state.get("query", "")).strip()
     raw_query = state.get("query", "").strip()
-    query = re.sub(r"[^\w\s%]", " ", raw_query).lower().strip()
-    amount_match = re.search(r"\b\d{3,7}\b", query)
+    clean_query = re.sub(r"[^\w\s%,₹.-]", " ", raw_query).lower().strip()
+    amount_match = extract_amount(query=raw_query)
+    query = clean_query
     user_alloc, unknown_assets = extract_user_allocation(query)
     llm = get_llm(temperature=0)
-    last_stage = None
 
-
-    if memory:
-        for m in reversed(memory):
-            if m.get("stage"):
-                last_stage = m.get("stage")
-                break
 
     # -------------------------
     # RESTORE SELECTED FUNDS
@@ -446,56 +814,37 @@ def advisor_agent(state: AgentState) -> AgentState:
                 state["selected_funds"] = funds
                 break
     
-    # -------------------------
-    # INTENT DETECTION (moved early)
-    # -------------------------
-    llm_intent = detect_intent_llm(query, state, llm)
-
-    intent = llm_intent 
-
-    agents = detect_agents_llm(query, state, intent, llm)
-
-    stage = decide_mode(intent, profile)
-
-    state["intent"] = intent
-    state["stage"] = stage
-
-    print("LLM Intent:", intent)
 
     # -------------------------
     # STAGE DETECTION (CRITICAL)
     # -------------------------
 
-    if memory:
-        for m in reversed(memory):
-            last_profile = m.get("profile", {})
-            if last_profile and any(last_profile.values()):
-                for k, v in last_profile.items():
-                    if not profile.get(k):
-                        profile[k] = v
-                break
-
     if not query.strip():
-       return set_state(
-            state,
-            start,
-            answer="Please enter a valid query.",
-            agent="advisor_agent",
-            confidence=0.5,
-            decision_source="validation",
-            answer_source="advisor",
-            trace_action="invalid_input"
-        )           
+        return set_state(
+        state,
+        start,
+        answer="Please enter a valid query.",
+        agent="advisor_agent",
+        confidence=0.5,
+        decision_source="validation",
+        answer_source="advisor",
+        trace_action="invalid_input"
+        )        
 
     state.setdefault("tools_used", [])
     state.setdefault("trace", [])
-    
+    expected = state.get("expected_next_input")
 
-
+    # Then enrich from memory ONLY if missing
     
-    age_match = re.search(r"\b([1-9][0-9])\b", query)
-    if age_match:
-        profile["age"] = age_match.group(1)
+    state["profile"] = profile
+
+    age = extract_age(query)
+
+    print("age : ", age)
+
+    if age:
+        profile["age"] = age
     
     RISK_OPTIONS = ["low", "medium", "high"]
     GOAL_OPTIONS = ["growth", "income"]
@@ -534,14 +883,6 @@ def advisor_agent(state: AgentState) -> AgentState:
             profile["investment_type"] = match
             break
 
-    state["profile"] = profile
-
-    # Then enrich from memory ONLY if missing
-    risk = profile.get("risk")
-    goal = profile.get("goal")
-    investment = profile.get("investment_type")
-
-    profile_complete = all([risk, goal, investment])
 
 
     # # 2. THEN compare
@@ -552,35 +893,263 @@ def advisor_agent(state: AgentState) -> AgentState:
 
     #is_profile_update = profile != prev_profile
 
-    if amount_match:
-        profile["amount"] = int(amount_match.group())
+    if amount_match and (
+        expected == "amount"
+        or "amount" in query
+        or "invest" in query
+        or "sip" in query
+    ):
+        profile["amount"] = float(amount_match)
 
-    # ADD THIS BLOCK HERE
-    expected = state.get("expected_next_input")
+    
+    print("amount_match ", amount_match)
 
-    if expected == "risk" and profile.get("risk"):
-        state.pop("expected_next_input", None)
+    state["profile"] = profile
 
-    elif expected == "goal" and profile.get("goal"):
-        state.pop("expected_next_input", None)
+    
+    # -------------------------
+    # FUND SUGGESTION DETECTION
+    # -------------------------
 
-    elif expected == "investment_type" and profile.get("investment_type"):
-        state.pop("expected_next_input", None)
+    query_lower = query.lower().strip()
 
-    elif expected == "amount" and profile.get("amount"):
-        state.pop("expected_next_input", None)  
+    fund_keywords = [
+    "fund",
+    "funds",
+    "mutual fund",
+    "mutual funds",
+    "portfolio",
+    "investment option",
+    "investment options"
+    ]
+
+    fund_confirmation_words = [
+    "please suggest",
+    "suggest funds",
+    "recommend funds",
+    "give funds",
+    "show funds",
+    "fund suggestions"
+    ]
+
+
+    # -------------------------
+    # INTENT DETECTION (moved early)
+    # -------------------------
+
     
 
-    missing = []
+    risk_phrases = {
+
+    # =========================
+    # High leaning
+    # =========================
+
+    "medium to high": "high",
+    "medium-to-high": "high",
+    "moderate to high": "high",
+    "medium high": "high",
+
+    "aggressive growth": "high",
+    "very aggressive": "high",
+    "high growth": "high",
+    "maximum returns": "high",
+
+    # =========================
+    # Medium leaning
+    # =========================
+
+    "low to medium": "medium",
+    "low-to-medium": "medium",
+
+    "balanced": "medium",
+    "balanced strategy": "medium",
+    "balanced investment": "medium",
+
+    "moderate": "medium",
+
+    "avoid high risk": "medium",
+    "avoid extremely high risk": "medium",
+
+    "market volatility": "medium",
+    "economic slowdown": "medium",
+
+    "controlled risk": "medium",
+    "stable growth": "medium",
+
+    # =========================
+    # Explicit
+    # =========================
+
+    "high risk": "high",
+    "medium risk": "medium",
+    "low risk": "low"
+    }
+
+    
+
+    for phrase, mapped in risk_phrases.items():
+
+        if phrase in query:
+            profile["risk"] = mapped
+            break
+        
+    risk = profile.get("risk")        
+    goal = profile.get("goal")
+    investment = profile.get("investment_type")
+    amount = profile.get("amount")
+
+    profile_complete = (
+    risk is not None
+    and goal is not None
+    and investment is not None
+    and amount is not None
+    )
+
+    user_requested_funds = (
+        profile_complete
+        and (
+        any(k in query_lower for k in fund_keywords)
+        or any(w in query_lower for w in fund_confirmation_words)
+        )
+        )
+    
+    print("user_requested_funds ",user_requested_funds)
+
+    remaining_missing = []
 
     if not profile.get("risk"):
-        missing.append("risk level (low / medium / high)")
+        remaining_missing.append("risk")
 
     if not profile.get("goal"):
-        missing.append("goal (growth / income)")
+        remaining_missing.append("goal")
 
     if not profile.get("investment_type"):
-        missing.append("investment type (SIP / lump sum)")
+        remaining_missing.append("investment_type")
+
+    if profile.get("amount") is None:
+        remaining_missing.append("amount")
+
+    stage = None
+
+    fund_confirmation = (
+    any(k in query_lower for k in fund_keywords)
+    or any(w in query_lower for w in fund_confirmation_words)
+    )
+
+    # continuation after advisor suggested funds
+    last_assistant = ""
+
+    # Skip current user turn
+    for m in reversed(memory[:-1]):
+
+        assistant_msg = m.get("assistant")
+
+        if assistant_msg:
+            last_assistant = assistant_msg.lower()
+            break
+
+    print("last_assistant:", last_assistant)
+    
+
+    if (
+    query_lower in ["yes", "yeah", "yup", "sure", "ok", "okay"]
+    and "suggest" in last_assistant
+    and "fund" in last_assistant
+    ):
+        fund_confirmation = True
+
+    if fund_confirmation:
+        user_requested_funds = True
+
+   # -------------------------
+    # FUND CONFIRMATION OVERRIDE
+    # -------------------------
+
+    if fund_confirmation and profile_complete:
+
+        # User confirmed they want fund suggestions
+        # Example:
+        # Assistant: "I can also suggest funds"
+        # User: "yes"
+
+        intent = "allocation"
+        stage = "suggest"
+        user_requested_funds = True
+
+    else:
+
+        llm_intent = detect_intent_llm(query, state, llm)
+        intent = llm_intent
+
+        # Pure allocation flow does not need external agents
+
+
+    # -------------------------
+    # AGENT DETECTION
+    # -------------------------
+
+    # Pure onboarding / allocation flow
+    # should NOT trigger external agents
+
+    onboarding_active = (
+        expected is not None
+        or (
+        intent == "allocation"
+        and profile_complete
+        and not user_requested_funds
+        )
+        )
+
+    if onboarding_active:
+
+        agents = []
+
+    else:
+
+        agents = detect_agents_llm(
+        query=query,
+        state=state,
+        intent=intent,
+        llm=llm
+        )
+
+    if not stage:
+        stage = decide_mode(intent, profile_complete)   
+
+    state["intent"] = intent
+    state["stage"] = stage
+
+    print("LLM Intent:", intent)
+
+    # -------------------------
+    # CONTINUATION CLEANUP
+    # -------------------------
+
+    completed = {
+    "risk": profile.get("risk"),
+    "goal": profile.get("goal"),
+    "investment_type": profile.get("investment_type"),
+    "amount": profile.get("amount")
+    }
+
+    if expected and completed.get(expected):
+
+        # If investment type AND amount came together
+        # clear everything properly
+        state.pop("expected_next_input", None)
+
+
+    # -------------------------
+    # CONTINUATION STATE
+    # -------------------------
+
+    if remaining_missing:
+        state["expected_next_input"] = remaining_missing[0]
+    else:
+        state.pop("expected_next_input", None)
+
+    #expected = state.get("expected_next_input")
 
 
     
@@ -601,14 +1170,14 @@ def advisor_agent(state: AgentState) -> AgentState:
     is_execution = stage == "execute"
 
 
+    print("is_suggestion ",is_suggestion)
     print("is_projection ",is_projection)
-
+    print("is_execution ",is_execution)
 
     # -------------------------
     # PRIORITY: AMOUNT INTENT
     # -------------------------
    
-
     # -------------------------
     # EXECUTION DETECTION (AFTER suggestion)
     # -------------------------
@@ -700,63 +1269,105 @@ def advisor_agent(state: AgentState) -> AgentState:
     
         for asset in remaining_assets:
             allocation_gap_msg += f"- {asset.capitalize()} → {final_alloc[asset]}%\n"
-    
+
     # -------------------------
-    # INVESTMENT AMOUNT
+    # PROFILE COMPLETION FLOW
     # -------------------------
-    
-    amount = profile.get("amount")
 
-    amount_block = ""
-    
-    if amount and risk and goal:
 
-        if investment == "sip":
-                amount_block = f"\n💰 Monthly SIP: ₹{amount:,}\n\n"
-        elif investment == "lump sum":
-            amount_block = f"\n💰 Lump Sum: ₹{amount:,}\n\n"
-        else:
-            amount_block = f"\n💰 Investment Amount: ₹{amount:,}\n\n"
 
-        
-        amount_block += "\n📊 Suggested split:\n\n"
-       
-        for asset, percent in final_alloc.items():
-            fund_amount = int(amount * percent / 100)
+    missing_non_amount = [
+        x for x in remaining_missing
+        if x != "amount"
+        ]   
     
-            amount_block += f"- ₹{fund_amount:,} ({percent}%) → {asset.capitalize()}\n"
-    
-    if not amount:
-        if investment == "sip":
-            msg = "Before proceeding, please tell me your monthly investment amount (e.g., ₹5,000/month)."
-        elif investment == "lump sum":
-            msg = "Before proceeding, please tell me your one-time investment amount (e.g., ₹50,000)."
-        else:
-            msg = "Before proceeding, please tell me your investment amount (e.g., ₹5,000/month for SIP or ₹50,000 one-time)"
+    if missing_non_amount:
+
+        questions = []
+
+        if "risk" in missing_non_amount:
+            questions.append(
+            "• Risk level: Low / Medium / High"
+            )
+
+        if "goal" in missing_non_amount:
+            questions.append(
+            "• Goal: Growth / Income"
+            )
+
+        if "investment_type" in missing_non_amount:
+            questions.append(
+            "• Investment type: SIP / Lump sum"
+            )
+
+        state["expected_next_input"] = missing_non_amount[0]
 
         return set_state(
             state,
             start,
-            answer=msg,
+            answer=(
+                "Before suggesting investments, please share:\n\n"
+                + "\n".join(f"- {q}" for q in questions)
+            ),
             agent="advisor_agent",
-            confidence=0.9,
+            confidence=0.95,
             decision_source="clarification",
             answer_source="advisor",
-            trace_action="missing_amount"
-        )   
-    
-    if investment == "sip":
-        sip_amount = f"₹{amount:,}/month" if amount else "₹5,000/month"
-    elif investment == "lump sum":
-        sip_amount = f"₹{amount:,} (one-time)" if amount else "₹50,000 (one-time)"
-    else:
-        sip_amount = "your investment amount"
+            trace_action="missing_profile"
+            )
 
-    suggestion_block = ""
+    if (
+        not missing_non_amount
+        and profile.get("amount") is None
+        ):
 
-    if is_suggestion:
+        investment_type = profile.get("investment_type")
 
-        # ✅ default fallback
+        if investment_type == "sip":
+
+            message = (
+            "Before proceeding, please tell me your "
+            "monthly investment amount "
+            "(e.g., ₹5,000/month)."
+        )
+
+        elif investment_type == "lump sum":
+
+            message = (
+            "Before proceeding, please tell me your "
+            "one-time investment amount "
+            "(e.g., ₹50,000)."
+        )
+
+        else:
+
+            message = (
+            "Before proceeding, please tell me your "
+            "investment amount."
+            )
+
+        state["expected_next_input"] = "amount"
+
+        return set_state(
+        state,
+        start,
+        answer=message,
+        agent="advisor_agent",
+        confidence=0.95,
+        decision_source="clarification",
+        answer_source="advisor",
+        trace_action="missing_amount"
+    )           
+
+    # -------------------------
+    # FUND SUGGESTIONS
+    # -------------------------
+
+    suggestion_block = "" 
+
+    if is_suggestion and user_requested_funds:
+
+        # default fallback
         selected_funds = [
         "HDFC Balanced Advantage Fund",
         "ICICI Prudential Equity Savings Fund",
@@ -764,26 +1375,57 @@ def advisor_agent(state: AgentState) -> AgentState:
         ]
 
         if risk and goal and investment:
-            key = (risk, goal, investment)
-            base_funds = FUND_SUGGESTIONS.get(key, [])
-            if key in FUND_SUGGESTIONS:
-                #selected_funds = FUND_SUGGESTIONS[key]
-                seed = int(hashlib.md5(query.encode()).hexdigest(), 16)
-                random.seed(seed)
-                selected_funds = random.sample(base_funds, min(3, len(base_funds)))
-                suggestion_block = "\n\n📊 Suggested funds:\n\n" + alloc(selected_funds)
 
+            key = (risk, goal, investment)
+
+            base_funds = FUND_SUGGESTIONS.get(key, [])
+
+            if key in FUND_SUGGESTIONS and base_funds:
+
+                seed = int(hashlib.md5(query.encode()).hexdigest(), 16)
+
+                random.seed(seed)
+
+                selected_funds = random.sample(
+                base_funds,
+                min(3, len(base_funds))
+                )
+
+                suggestion_block = (
+                "\n\n📊 Suggested funds:\n\n"
+                + alloc(selected_funds))
+                
             else:
-                suggestion_block = "\n\n📊 Here are some good starting options:\n\n" + alloc(selected_funds)
+
+                suggestion_block = (
+                "\n\n📊 Here are some good starting options:\n\n"
+                + alloc(selected_funds)
+                )
+
         else:
-            suggestion_block = "\n\n📊 Here are some good starting options:\n\n" + alloc(selected_funds) + \
-            "\n\n💡 I can suggest better if you share:\n- Risk level\n- Goal\n- Investment type (SIP or lump sum)"
+
+            suggestion_block = (
+            "\n\n📊 Here are some good starting options:\n\n"
+            + alloc(selected_funds)
+            + "\n\n💡 I can suggest better if you share:"
+            "\n- Risk level"
+            "\n- Goal"
+            "\n- Investment type (SIP or lump sum)"
+            )
 
         state["selected_funds"] = selected_funds
 
+    # -------------------------
+    # NO FUND REQUEST YET
+    # -------------------------
 
-    if not suggestion_block and not is_execution:
-        suggestion_block = "\n\n💡 If you want, I can suggest specific funds tailored to your profile."
+    elif is_suggestion and not is_execution:
+
+        suggestion_block = (
+        "\n\n💡 If you'd like, I can also suggest "
+        "specific funds tailored to your profile."
+        )
+
 
     # -------------------------
     # EXECUTION BLOCK (ONLY IF execution)
@@ -802,7 +1444,20 @@ def advisor_agent(state: AgentState) -> AgentState:
         "high": 12
         }
 
-        rate = return_map.get(risk, 10)
+        rate = profile.get("expected_return")
+        # 2. Extract from query if not already stored
+        if not rate:
+
+            extracted_rate = extract_rate(query)
+
+            if extracted_rate:
+                rate = extracted_rate
+                profile["expected_return"] = rate
+
+            # 3. Fallback to risk-based defaults
+            if not rate:
+                rate = return_map.get(risk, 10)
+
         fv_10 = fv_15 = None
         projection_block = "\n\n📈 Future Value Projection:\n\n"
         if amount and investment == "sip":
@@ -870,7 +1525,7 @@ def advisor_agent(state: AgentState) -> AgentState:
             "4. Review portfolio every 6–12 months"
             ])
     
-    if stage == "project":
+    if stage == "project" and is_projection:
 
         return_map = {
         "low": 8,
@@ -880,31 +1535,109 @@ def advisor_agent(state: AgentState) -> AgentState:
 
         rate = return_map.get(risk, 10)
 
-        if investment == "sip":
-            fv_10 = calculate_sip_future_value(amount, rate, 10)
-            fv_15 = calculate_sip_future_value(amount, rate, 15)
+        projection_info = extract_projection_duration(query)
 
-            projection_block = f"""
-📈 Future Value Projection:
+        projection_block = "\n📈 Future Value Projection:\n"
 
-₹{amount:,}/month → ₹{fv_10:,} in 10 years ({rate}% return)
-₹{amount:,}/month → ₹{fv_15:,} in 15 years ({rate}% return)
+        # -------------------------
+        # CUSTOM DURATION
+        # -------------------------
 
-👉 Say 'go ahead' to proceed.
-"""
+        if projection_info["custom"]:
 
-        elif investment == "lump sum":
-            fv_10 = calculate_lumpsum_future_value(amount, rate, 10)
-            fv_15 = calculate_lumpsum_future_value(amount, rate, 15)
+            years = projection_info["years"]
+            years = min(years, 50)
 
-            projection_block = f"""
-📈 Future Value Projection:
+            if investment == "sip":
 
-₹{amount:,} → ₹{fv_10:,} in 10 years ({rate}% return)
-₹{amount:,} → ₹{fv_15:,} in 15 years ({rate}% return)
+                future_value = calculate_sip_future_value(
+                amount,
+                rate,
+                years
+                )
 
-👉 Say 'go ahead' to proceed.
-"""
+            else:
+
+                future_value = calculate_lumpsum_future_value(
+                amount,
+                rate,
+                years
+                )
+
+            # display formatting
+            if years >= 1:
+
+                duration_label = (
+                    f"{years:.1f} years"
+                        if years % 1 != 0
+                        else f"{int(years)} years"
+                            )
+
+            else:
+
+                months = max(round(years * 12), 1)
+
+                duration_label = f"{months} months"
+
+            if investment == "sip":
+
+                projection_block += (
+                f"\n₹{amount:,.0f}/month "
+                f"→ ₹{future_value:,.0f} "
+                f"in {duration_label} "
+                f"({rate}% return)\n"
+                )
+
+            else:
+
+                projection_block += (
+                f"\n₹{amount:,.0f} "
+                f"→ ₹{future_value:,.0f} "
+                f"in {duration_label} "
+                f"({rate}% return)\n"
+                )
+
+        # -------------------------
+        # DEFAULT PROJECTIONS
+        # -------------------------
+
+        else:
+
+            default_years = [10, 15]
+
+            for years in default_years:
+
+                if investment == "sip":
+
+                    future_value = calculate_sip_future_value(
+                    amount,
+                    rate,
+                    years
+                    )
+
+                    projection_block += (
+                    f"\n₹{amount:,.0f}/month "
+                    f"→ ₹{future_value:,.0f} "
+                    f"in {years} years "
+                    f"({rate}% return)\n"
+                    )
+
+                else:
+
+                    future_value = calculate_lumpsum_future_value(
+                    amount,
+                    rate,
+                    years
+                    )
+
+                    projection_block += (
+                    f"\n₹{amount:,.0f} "
+                    f"→ ₹{future_value:,.0f} "
+                    f"in {years} years "
+                    f"({rate}% return)\n"
+                    )
+
+        projection_block += "\n👉 Say 'go ahead' to proceed.\n"
 
     profile_lines = []
     profile_section= ""
@@ -920,9 +1653,40 @@ def advisor_agent(state: AgentState) -> AgentState:
             profile_lines.append(f"- Goal: {profile.get('goal')}")
 
         if profile.get("investment_type"):
-            profile_lines.append(f"- Investment: {profile.get('investment_type').upper()}")
+
+            investment_type = profile.get("investment_type").lower()
+
+            investment_display_map = {
+            "sip": "SIP",
+            "lump sum": "Lump Sum"
+            }
+
+            investment_display = investment_display_map.get(
+            investment_type,
+            investment_type
+            )
+
+            profile_lines.append(
+            f"- Investment: {investment_display}"
+            )
 
         profile_section = "\n".join(profile_lines) + "\n\n"
+
+    
+    # -------------------------
+    # AMOUNT BLOCK
+    # -------------------------
+
+    amount_block = ""
+
+    if amount:
+        if investment == "sip":
+            amount_block = f"💰 Monthly SIP: ₹{amount:,.0f}\n"
+        elif investment == "lump sum":
+
+            amount_block = f"💰 Lump Sum: ₹{amount:,.0f}\n"
+        else:
+            amount_block = f"💰 Investment Amount: ₹{amount:,.0f}\n"
 
     # -------------------------
     # RUN AGENTS (CORRECT)
@@ -944,28 +1708,6 @@ def advisor_agent(state: AgentState) -> AgentState:
             decision_source="validation",
             answer_source="advisor",
             trace_action="invalid_input"
-        )
-
-        # ✅ If user gave NO useful info → ask
-    if len(missing) >= 2 and not user_alloc:
-        followup = "\n\nTo refine this further, you can also share:\n"
-        followup += "\n".join([f"- {m}" for m in missing])
-
-        answer = f"""Got it — I can help with that.
-
-{followup}
-
-Can you share that?
-"""
-        return set_state(
-            state,
-            start,
-            answer=answer,
-            agent="advisor_agent",
-            confidence=0.9,
-            decision_source="clarification",
-            answer_source="advisor",
-            trace_action="ask_missing"
         )
 
     intro = ""

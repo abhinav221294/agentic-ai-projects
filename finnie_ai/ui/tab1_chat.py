@@ -175,7 +175,8 @@ def render_chat_tab(state):
         "memory": memory_snapshot,
         "profile": last_profile,   # ✅ THIS IS THE FIX
         "stage": last_stage,
-        "selected_funds": last_funds
+        "selected_funds": last_funds,
+        "expected_next_input": state.get("expected_next_input")
         })
         state["selected_funds"] = result.get("selected_funds", last_funds)
 
@@ -203,6 +204,7 @@ def render_chat_tab(state):
             "advisor_insights": result.get("advisor_insights"),
             "advisor_advice": result.get("advisor_advice"),
             "active_asset": result.get("active_asset", state.get("active_asset")),
+            "expected_next_input": result.get("expected_next_input")
             })
         st.session_state.pending_query = None
         st.rerun()
