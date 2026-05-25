@@ -62,8 +62,6 @@ User Query: {query}
 
         status = "success"
 
-        print("CATEGORY:", category)
-
 
         add_trace(
             state,

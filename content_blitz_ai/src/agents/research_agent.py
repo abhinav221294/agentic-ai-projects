@@ -3,25 +3,20 @@ from src.prompts.prompt import RESEARCH_PROMPT, RESEARCH_SYNTHESIS_PROMPT
 #from src.integrations.perplexity_client import perplexity_search
 from src.integrations.tavily_client import tavily_search
 from src.integrations.gemini_client import gemini_llm_client
+from src.core.workflow_utils import (
+    add_trace,
+    add_error,
+    validate_query
+)
+from src.core.config import GEMINI_MODEL,RESEARCH_COMPLETED,RESEARCH_FAILED
 import time
-from dotenv import load_dotenv
-
-load_dotenv()
 
 def optimize_search_query(query, llm):
 
-    prompt = f"""
-Convert the user request into an optimized web search query.
-
-Rules:
-- concise
-- keyword rich
-- no explanations
-- optimized for web retrieval
+    prompt = f"""{RESEARCH_PROMPT}
 
 User Query:
-{query}
-"""
+{query}"""
 
     response = llm.invoke(prompt)
 
@@ -45,7 +40,7 @@ def format_search_results(search_results):
     for result in search_results.get("results", []):
 
         formatted_results.append(
-            f"""`   `Title:
+            f"""Title:
 {result.get("title")}
 
 Content:
@@ -88,14 +83,29 @@ Retrieved Research:
 def research_agent(state: AgentState) -> AgentState:
 
     start = time.time()
+    
+    query = state.get("user_query")
 
-    query = state["user_query"]
+    if not validate_query(query):
+
+        add_error(state, "Missing research query")
+
+        return set_state(
+        state=state,
+        status="failed",
+        agent="researcher",
+        trace_action=RESEARCH_FAILED,
+        extra={
+            "workflow_step": RESEARCH_FAILED
+            }
+        )
 
     active_agent = "researcher"
 
-    llm = gemini_llm_client()
-
     try:
+        add_trace(state, active_agent, "query_optimization_started")
+        llm = gemini_llm_client(model=GEMINI_MODEL)
+
         # =========================
         # QUERY OPTIMIZATION
         # =========================
@@ -104,14 +114,16 @@ def research_agent(state: AgentState) -> AgentState:
             query=query,
             llm=llm
         )
-
-         # =========================
+        add_trace(state, active_agent, "query_optimization_completed")
+        # =========================
         # RETRIEVAL
         # =========================
 
         search_results = tavily_search(
             query=query_modified
         )
+
+        add_trace(state, active_agent, "retrieval_completed")
 
          # =========================
         # FORMAT RESULTS
@@ -120,6 +132,21 @@ def research_agent(state: AgentState) -> AgentState:
         formatted_results = format_search_results(
             search_results
         )
+
+        if not formatted_results:
+
+            add_error(state, "No research results found")
+
+            return set_state(
+                state=state,
+                status="failed",
+                confidence=0.2,
+                agent=active_agent,
+                trace_action=RESEARCH_FAILED,
+                extra={
+                    "workflow_step": RESEARCH_FAILED
+                }
+            )
 
         # =========================
         # SYNTHESIS
@@ -130,25 +157,34 @@ def research_agent(state: AgentState) -> AgentState:
             formatted_results=formatted_results,
             llm=llm
             )
+        
+        add_trace(state, active_agent, "synthesis_completed")
+        
+        add_trace(
+        state,
+        agent=active_agent,
+        action=RESEARCH_COMPLETED
+        )
 
         return set_state(
             state=state,
             start=start,
-            confidence=0.9,
+            confidence=min(len(search_results.get("results", [])) / 5, 1.0),
             status="success",
             agent=active_agent,
-            trace_action="research_completed",
+            trace_action=RESEARCH_COMPLETED,
             extra={
                 "optimized_query": query_modified,
                 "research_data": search_results,
-                "workflow_step": "research_completed"
+                "workflow_step": RESEARCH_COMPLETED,
+                "execution_time": round(time.time() - start, 2)
             },
             answer=synthesized_answer
         )
 
     except Exception as e:
 
-        state["errors"].append(str(e))
+        add_error(state, str(e))
 
         return set_state(
             state=state,
@@ -156,8 +192,8 @@ def research_agent(state: AgentState) -> AgentState:
             confidence=0.2,
             status="failed",
             agent=active_agent,
-            trace_action="research_failed",
+            trace_action=RESEARCH_FAILED,
             extra={
-                "workflow_step": "research_failed"
+                "workflow_step": RESEARCH_FAILED
             }
         )

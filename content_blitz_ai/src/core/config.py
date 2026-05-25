@@ -26,8 +26,8 @@ WORKFLOW_STARTED = "workflow_started"
 INTENT_CLASSIFICATION_COMPLETED = "intent_classification_completed"
 INTENT_CLASSIFICATION_FAILED = "intent_classification_failed"
 
-RESEARCH_STARTED = "research_started"
 RESEARCH_COMPLETED = "research_completed"
+RESEARCH_FAILED = "research_failed"
 
 FALLBACK_STARTED = "fallback_started"
 FALLBACK_COMPLETED = "fallback_completed"
