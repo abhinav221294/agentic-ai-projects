@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+
+# Env
+.env
+
+# Virtual environments
+finn_env/
+venv/
+*/finn_env/
+yf_env/
+*/yf_env/
+
+# Chroma DB (VERY IMPORTANT)
+chroma_fin_db/
+*/chroma_fin_db/
+
+# Data
+data/
+*/data/
+dataset/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Databases
+*.db
+*.sqlite
+
+# Streamlit
+.streamlit/

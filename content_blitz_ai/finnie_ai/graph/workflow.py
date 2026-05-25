@@ -79,7 +79,7 @@ def __build_workflow():
         category = state.get("category", "none")
         complexity = state.get("complexity", "simple")
         confidence = state.get("confidence", 1.0)
-        #query = state.get("query", "")
+        query = state.get("query", "")
         if not isinstance(category, str):
             decision = "fallback_agent"
 
@@ -189,7 +189,7 @@ def run_workflow(state: dict):
             "trace": state.get("trace", [])
         }
 
-    ##  ADD MEMORY HERE (THIS IS THE SPOT)
+    ## 🔥 ADD MEMORY HERE (THIS IS THE SPOT)
     #state.setdefault("memory", []).append({
     #    "query": state.get("query"),
     #    "assistant": result.get("answer"),
@@ -198,7 +198,7 @@ def run_workflow(state: dict):
     #    "selected_funds": result.get("selected_funds") or state.get("selected_funds")
     #})
 
-    #  Return response
+    # ✅ Return response
     return {
         "answer": result.get("answer"),
         "agent": result.get("agent"),
