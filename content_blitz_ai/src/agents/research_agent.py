@@ -1,12 +1,14 @@
 from src.workflows.state_management import AgentState,set_state
 from src.prompts.prompt import RESEARCH_PROMPT, RESEARCH_SYNTHESIS_PROMPT
 #from src.integrations.perplexity_client import perplexity_search
-from src.integrations.tavily_client import tavily_search
+#from src.integrations.tavily_client import tavily_search
 from src.integrations.gemini_client import gemini_llm_client
+from src.tools.research_tools import web_search_tool
 from src.core.workflow_utils import (
     add_trace,
     add_error,
-    validate_query
+    validate_query,
+     calculate_execution_time
 )
 from src.core.config import GEMINI_MODEL,RESEARCH_COMPLETED,RESEARCH_FAILED
 import time
@@ -83,7 +85,6 @@ Retrieved Research:
 def research_agent(state: AgentState) -> AgentState:
 
     start = time.time()
-    
     query = state.get("user_query")
 
     if not validate_query(query):
@@ -119,8 +120,12 @@ def research_agent(state: AgentState) -> AgentState:
         # RETRIEVAL
         # =========================
 
-        search_results = tavily_search(
-            query=query_modified
+        #search_results = tavily_search(
+        #    query=query_modified
+        #)    
+
+        search_results = web_search_tool.invoke(
+        {"query": query_modified}
         )
 
         add_trace(state, active_agent, "retrieval_completed")
@@ -169,15 +174,16 @@ def research_agent(state: AgentState) -> AgentState:
         return set_state(
             state=state,
             start=start,
-            confidence=min(len(search_results.get("results", [])) / 5, 1.0),
+            onfidence=max(0.5,min(len(search_results.get("results", [])) / 5, 1.0)),
             status="success",
             agent=active_agent,
             trace_action=RESEARCH_COMPLETED,
             extra={
                 "optimized_query": query_modified,
                 "research_data": search_results,
+                "source_count": len(search_results.get("results", [])),
                 "workflow_step": RESEARCH_COMPLETED,
-                "execution_time": round(time.time() - start, 2)
+                "execution_time": calculate_execution_time(start)
             },
             answer=synthesized_answer
         )
@@ -194,6 +200,7 @@ def research_agent(state: AgentState) -> AgentState:
             agent=active_agent,
             trace_action=RESEARCH_FAILED,
             extra={
-                "workflow_step": RESEARCH_FAILED
+                "workflow_step": RESEARCH_FAILED,
+                "execution_time": calculate_execution_time(start)
             }
         )

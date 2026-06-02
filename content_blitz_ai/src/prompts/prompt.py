@@ -119,3 +119,18 @@ Requirements:
 - Make the content easy to read
 
 Return only the final blog post."""
+
+
+
+LINKEDIN_WRITER_PROMPT = """You are an expert LinkedIn content writer.
+
+Write an engaging LinkedIn post using the provided strategy.
+
+Requirements:
+- Strong opening hook
+- Short paragraphs
+- Professional but conversational tone
+- Use whitespace for readability
+- End with a call-to-action
+
+Return only the final LinkedIn post."""
