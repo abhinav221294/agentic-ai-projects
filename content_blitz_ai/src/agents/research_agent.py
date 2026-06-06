@@ -7,8 +7,7 @@ from src.tools.research_tools import web_search_tool
 from src.core.workflow_utils import (
     add_trace,
     add_error,
-    validate_query,
-     calculate_execution_time
+    validate_query
 )
 from src.core.config import GEMINI_MODEL,RESEARCH_COMPLETED,RESEARCH_FAILED
 import time
@@ -86,6 +85,7 @@ def research_agent(state: AgentState) -> AgentState:
 
     start = time.time()
     query = state.get("user_query")
+    active_agent = "researcher"
 
     if not validate_query(query):
 
@@ -94,14 +94,13 @@ def research_agent(state: AgentState) -> AgentState:
         return set_state(
         state=state,
         status="failed",
-        agent="researcher",
+        confidence=0.2,
+        agent=active_agent,
         trace_action=RESEARCH_FAILED,
         extra={
             "workflow_step": RESEARCH_FAILED
             }
         )
-
-    active_agent = "researcher"
 
     try:
         add_trace(state, active_agent, "query_optimization_started")
@@ -174,7 +173,7 @@ def research_agent(state: AgentState) -> AgentState:
         return set_state(
             state=state,
             start=start,
-            onfidence=max(0.5,min(len(search_results.get("results", [])) / 5, 1.0)),
+            confidence=max(0.5,min(len(search_results.get("results", [])) / 5, 1.0)),
             status="success",
             agent=active_agent,
             trace_action=RESEARCH_COMPLETED,
@@ -183,7 +182,6 @@ def research_agent(state: AgentState) -> AgentState:
                 "research_data": search_results,
                 "source_count": len(search_results.get("results", [])),
                 "workflow_step": RESEARCH_COMPLETED,
-                "execution_time": calculate_execution_time(start)
             },
             answer=synthesized_answer
         )
@@ -200,7 +198,6 @@ def research_agent(state: AgentState) -> AgentState:
             agent=active_agent,
             trace_action=RESEARCH_FAILED,
             extra={
-                "workflow_step": RESEARCH_FAILED,
-                "execution_time": calculate_execution_time(start)
+                "workflow_step": RESEARCH_FAILED
             }
         )

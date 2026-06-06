@@ -2,8 +2,7 @@ from src.workflows.state_management import AgentState, set_state
 from src.core.config import FALLBACK_STARTED,FALLBACK_COMPLETED,FALLBACK_RESPONSE
 import time
 from src.core.workflow_utils import (
-    add_trace,
-    calculate_execution_time
+    add_trace
 )
 
 def fallback_agent(state: AgentState) -> AgentState:
@@ -28,7 +27,6 @@ def fallback_agent(state: AgentState) -> AgentState:
     agent=active_agent,
     trace_action=FALLBACK_RESPONSE,
     extra={
-        "workflow_step": FALLBACK_COMPLETED,
-        "execution_time": calculate_execution_time(start)
+        "workflow_step": FALLBACK_COMPLETED
     }
 )

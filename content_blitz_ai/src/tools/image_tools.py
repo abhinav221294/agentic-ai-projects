@@ -4,7 +4,7 @@
 
 from langchain.tools import tool
 
-from integrations.image_client import generate_image
+from src.integrations.image_client import generate_image
 
 
 @tool

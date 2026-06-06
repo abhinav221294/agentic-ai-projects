@@ -1,12 +1,13 @@
-import openai
-
-client = openai()
+from openai import OpenAI
 
 def generate_image(
-        prompt: str,
-        model: str = "gpt-image-1",
-        size: str = "1024x1024"):
-    
+    prompt: str,
+    model: str = "gpt-image-1",
+    size: str = "1024x1024"
+):
+
+    client = OpenAI()
+
     response = client.images.generate(
         model=model,
         prompt=prompt,
@@ -14,6 +15,3 @@ def generate_image(
     )
 
     return response.data[0].url
-    
-
-

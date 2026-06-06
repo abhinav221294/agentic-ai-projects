@@ -62,7 +62,14 @@ LINKEDIN_COMPLETED = "linkedin_completed"
 LINKEDIN_FAILED = "linkedin_failed"
 LINKEDIN_VALIDATION_FAILED = "linkedin_validation_failed"
 
+# ======================
+# IMAGE
+# ======================
 
+IMAGE_GENERATED = "image_generated"
+IMAGE_COMPLETED = "image_completed"
+IMAGE_FAILED = "image_failed"
+IMAGE_VALIDATION_FAILED = "image_validation_failed"
 
 FALLBACK_RESPONSE = """Sorry, I could not understand the request properly.
 

@@ -5,8 +5,7 @@ STRATEGY_GENERATED,STRATEGY_STARTED)
 from src.integrations.gemini_client import gemini_llm_client
 from src.core.workflow_utils import (
     add_trace,
-    add_error,
-    calculate_execution_time
+    add_error
 )
 import time
 
@@ -64,8 +63,7 @@ Research Content:
             trace_action=STRATEGY_GENERATED,
             extra={
                 "content_plan": strategy,
-                "workflow_step": STRATEGY_COMPLETED,
-                "execution_time": calculate_execution_time(start)
+                "workflow_step": STRATEGY_COMPLETED
             }
         )
 
@@ -80,8 +78,7 @@ Research Content:
             confidence=0.2,
             trace_action=STRATEGY_FAILED,
             extra={
-                "workflow_step": STRATEGY_FAILED,
-                "execution_time": calculate_execution_time(start)
+                "workflow_step": STRATEGY_FAILED
             }
         )
         

@@ -1,6 +1,5 @@
 import time
 from src.workflows.state_management import AgentState,set_state
-
 from src.prompts.prompt import LINKEDIN_WRITER_PROMPT
 from src.integrations.claude_client import claude_client_llm
 from src.tools.content_tools import (
@@ -15,20 +14,18 @@ from src.tools.utility_tools import (
 from src.core.workflow_utils import (
     add_trace,
     add_error,
-    validate_query,
-    calculate_execution_time
+    validate_query
 )
 
-from src.core.config import (LINKEDIN_WRITER_PROMPT,
- LINKEDIN_GENERATED,LINKEDIN_COMPLETED,
+from src.core.config import (LINKEDIN_GENERATED,LINKEDIN_COMPLETED,
  LINKEDIN_VALIDATION_FAILED,LINKEDIN_FAILED)
 
 def linkedin_writer_agent(state: AgentState) -> AgentState:
-    start = start.time()
+    start = time.time()
     query = state.get('user_query')
     content_plan = state.get("content_plan")
     active_agent = "linkedin_writer_agent"
-    if not validate_query(query=query):
+    if not validate_query(query):
         add_error(state,"Missing LinkedIn query")
 
         return set_state(
@@ -45,7 +42,7 @@ def linkedin_writer_agent(state: AgentState) -> AgentState:
     
     try:
         hook = linkedin_hook_tool.invoke(
-            {"topic":"query"}
+            {"topic":query}
         )
 
         cta = generate_cta_tool.invoke(
@@ -77,7 +74,7 @@ Content Strategy:
             max_tokens=1000,
         )
 
-        response = llm.invoke(response.content).strip()
+        response = llm.invoke(prompt)
 
         linkedin_post = str(response.content).strip()
         word_count = word_count_tool.invoke(
@@ -95,14 +92,14 @@ Content Strategy:
             start=start,
             answer=linkedin_post,
             confidence=0.9,
-            status="suceess",
+            status="success",
             agent=active_agent,
             trace_action=LINKEDIN_GENERATED,
             extra={
                 "hook":hook,
                 "cta": cta,
                 "word_count":word_count,
-                "linkedIn_post":linkedin_post,
+                "linkedin_post": linkedin_post,
                 "workflow_step": LINKEDIN_COMPLETED
 
                 }
@@ -119,7 +116,6 @@ Content Strategy:
             agent=active_agent,
             trace_action=LINKEDIN_FAILED,
             extra={
-                "workflow_step": LINKEDIN_FAILED,
-                "execution_time": calculate_execution_time(start)
+                "workflow_step": LINKEDIN_FAILED
             }
         )

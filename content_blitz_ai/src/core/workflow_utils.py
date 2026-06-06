@@ -26,8 +26,3 @@ def validate_query(query):
         return False
 
     return True
-
-
-def calculate_execution_time(start_time):
-
-    return round(time.time() - start_time, 2)

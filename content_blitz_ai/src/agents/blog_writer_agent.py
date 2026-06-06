@@ -8,8 +8,7 @@ from src.tools.utility_tools import word_count_tool
 from src.core.workflow_utils import (
     add_trace,
     add_error,
-    validate_query,
-    calculate_execution_time
+    validate_query
 )
 from src.tools.content_tools import (
     generate_title_tool,
@@ -84,8 +83,7 @@ Content Strategy:
         "outline": outline,
         "word_count": word_count,
         "blog_content": blog_content,
-        "workflow_step": BLOG_COMPLETED,
-        "execution_time": calculate_execution_time(start)
+        "workflow_step": BLOG_COMPLETED
     }
 )
 
@@ -99,7 +97,6 @@ Content Strategy:
             agent=active_agent,
             trace_action=BLOG_GENERATION_FAILED,
             extra={
-                "workflow_step": BLOG_FAILED,
-                "execution_time": calculate_execution_time(start)
+                "workflow_step": BLOG_FAILED
             }
         )
