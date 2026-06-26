@@ -1,5 +1,6 @@
 from src.workflows.state_management import AgentState, set_state
-from src.core.config import FALLBACK_STARTED,FALLBACK_COMPLETED,FALLBACK_RESPONSE
+from src.core.config import (FALLBACK_STARTED,FALLBACK_COMPLETED,
+                             FALLBACK_RESPONSE,LOW_CONFIDENCE)
 import time
 from src.core.workflow_utils import (
     add_trace
@@ -22,7 +23,7 @@ def fallback_agent(state: AgentState) -> AgentState:
     state=state,
     start=start,
     answer=answer,
-    confidence=0.2,
+    confidence=LOW_CONFIDENCE,
     status="success",
     agent=active_agent,
     trace_action=FALLBACK_RESPONSE,

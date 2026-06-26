@@ -2,7 +2,10 @@ from langchain_anthropic import ChatAnthropic
 
 
 def claude_client_llm(
-    model="claude-haiku-4-5-20251001",
+    #model="claude-haiku-4-5-20251001",
+    #model="claude-3-5-haiku-latest",
+    #model="claude-haiku-4-5-20251001",
+    model="claude-haiku-4-5",
     #"claude-sonnet-4-20250514",
     temperature=0.1,
     max_tokens=512,
@@ -10,7 +13,8 @@ def claude_client_llm(
     timeout=60,
     max_retries=3
 ):
-
+    #print("CLIENT MODEL =", model)
+    
     return ChatAnthropic(
         model=model,
         temperature=temperature,

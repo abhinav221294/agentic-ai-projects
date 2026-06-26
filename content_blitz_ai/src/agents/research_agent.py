@@ -9,7 +9,9 @@ from src.core.workflow_utils import (
     add_error,
     validate_query
 )
-from src.core.config import GEMINI_MODEL,RESEARCH_COMPLETED,RESEARCH_FAILED
+from src.core.config import (GEMINI_MODEL,RESEARCH_COMPLETED,
+RESEARCH_FAILED,LOW_CONFIDENCE, SYNTHESIS_COMPLETED,RETRIEVAL_COMPLETED,
+QUERY_OPTIMIZATION_STARTED,QUERY_OPTIMIZATION_COMPLETED)
 import time
 
 def optimize_search_query(query, llm):
@@ -85,7 +87,7 @@ def research_agent(state: AgentState) -> AgentState:
 
     start = time.time()
     query = state.get("user_query")
-    active_agent = "researcher"
+    active_agent = "research_agent"
 
     if not validate_query(query):
 
@@ -94,7 +96,7 @@ def research_agent(state: AgentState) -> AgentState:
         return set_state(
         state=state,
         status="failed",
-        confidence=0.2,
+        confidence=LOW_CONFIDENCE,
         agent=active_agent,
         trace_action=RESEARCH_FAILED,
         extra={
@@ -103,7 +105,7 @@ def research_agent(state: AgentState) -> AgentState:
         )
 
     try:
-        add_trace(state, active_agent, "query_optimization_started")
+        add_trace(state, active_agent, QUERY_OPTIMIZATION_STARTED)
         llm = gemini_llm_client(model=GEMINI_MODEL)
 
         # =========================
@@ -114,7 +116,7 @@ def research_agent(state: AgentState) -> AgentState:
             query=query,
             llm=llm
         )
-        add_trace(state, active_agent, "query_optimization_completed")
+        add_trace(state, active_agent, QUERY_OPTIMIZATION_COMPLETED)
         # =========================
         # RETRIEVAL
         # =========================
@@ -127,7 +129,7 @@ def research_agent(state: AgentState) -> AgentState:
         {"query": query_modified}
         )
 
-        add_trace(state, active_agent, "retrieval_completed")
+        add_trace(state, active_agent, RETRIEVAL_COMPLETED)
 
          # =========================
         # FORMAT RESULTS
@@ -144,7 +146,7 @@ def research_agent(state: AgentState) -> AgentState:
             return set_state(
                 state=state,
                 status="failed",
-                confidence=0.2,
+                confidence=LOW_CONFIDENCE,
                 agent=active_agent,
                 trace_action=RESEARCH_FAILED,
                 extra={
@@ -162,7 +164,7 @@ def research_agent(state: AgentState) -> AgentState:
             llm=llm
             )
         
-        add_trace(state, active_agent, "synthesis_completed")
+        add_trace(state, active_agent, SYNTHESIS_COMPLETED)
         
         add_trace(
         state,
@@ -170,34 +172,38 @@ def research_agent(state: AgentState) -> AgentState:
         action=RESEARCH_COMPLETED
         )
 
+        results = search_results.get("results", [])
+        source_count = len(results)
+
         return set_state(
             state=state,
             start=start,
-            confidence=max(0.5,min(len(search_results.get("results", [])) / 5, 1.0)),
+            confidence=max(0.5,min(source_count / 5, 1.0)),
             status="success",
             agent=active_agent,
             trace_action=RESEARCH_COMPLETED,
             extra={
                 "optimized_query": query_modified,
                 "research_data": search_results,
-                "source_count": len(search_results.get("results", [])),
+                "research_content": synthesized_answer,
+                "source_count": source_count,
                 "workflow_step": RESEARCH_COMPLETED,
-            },
-            answer=synthesized_answer
+            }
         )
 
     except Exception as e:
 
         add_error(state, str(e))
-
+        execution_time = round(time.time() - start, 2)
         return set_state(
             state=state,
             start=start,
-            confidence=0.2,
+            confidence=LOW_CONFIDENCE,
             status="failed",
             agent=active_agent,
             trace_action=RESEARCH_FAILED,
             extra={
-                "workflow_step": RESEARCH_FAILED
+                "workflow_step": RESEARCH_FAILED,
+                "execution_time": execution_time
             }
         )

@@ -7,28 +7,46 @@ from src.agents.linkedin_writer_agent import linkedin_writer_agent
 from src.agents.research_agent import research_agent
 from src.agents.strategist_agent import strategist_agent
 from src.agents.fallback_agent import fallback_agent
+from src.agents.research_decision_agent import research_decision_agent
+from src.core.config import WORKFLOW_STARTED,WORKFLOW_COMPLETED,WORKFLOW_FAILED
+
 import time
+
+
+def route_research(state: AgentState):
+
+    if state.get("requires_research"):
+        return "research"
+
+    return "strategist"
 
 def route_query(state: AgentState):
 
     intent = state.get("current_intent")
 
-    if intent == "blog":
-        return "research"
-
-    elif intent == "linkedin":
-        return "linkedin_writer"
+    if intent in ["blog", "linkedin"]:
+        return "research_decision"
 
     elif intent == "image":
         return "image_generation"
 
-    elif intent == "research":
-        return "research"
-
-    elif intent == "strategy":
-        return "strategist"
-
     return "fallback"
+
+def route_content(state: AgentState):
+
+    intent = state.get("current_intent")
+
+    if intent == "blog":
+        return "blog_writer"
+
+    elif intent == "linkedin":
+        return "linkedin_writer"
+    
+    raise ValueError(f"Unsupported content intent: {intent}")
+
+def content_dispatcher(state: AgentState):
+
+    return state
 
 def __build_workflow():
 
@@ -39,14 +57,35 @@ def __build_workflow():
     workflow.add_node("blog_writer", blog_writer_agent)
     workflow.add_node("linkedin_writer", linkedin_writer_agent)
     workflow.add_node("image_generation", image_agent)
+    
+    workflow.add_node("research_decision",research_decision_agent)
+    
     workflow.add_node("research", research_agent)
     workflow.add_node("strategist", strategist_agent)
+    workflow.add_node(
+    "content_dispatcher",content_dispatcher)
     workflow.add_node("fallback", fallback_agent)
 
     workflow.set_entry_point("query_handler")
 
-    workflow.add_conditional_edges("query_handler",
-                                   route_query)
+    workflow.add_conditional_edges(
+    "query_handler",
+    route_query,
+    {
+        "research_decision": "research_decision",
+        "image_generation": "image_generation",
+        "fallback": "fallback"
+    }
+)
+
+    workflow.add_conditional_edges(
+    "research_decision",
+    route_research,
+    {
+        "research": "research",
+        "strategist": "strategist"
+    }
+)
 
     #workflow.add_edge("blog_writer", END)
     workflow.add_edge("linkedin_writer", END)
@@ -54,12 +93,26 @@ def __build_workflow():
     #workflow.add_edge("research", END)
     workflow.add_edge("research", "strategist")
     #workflow.add_edge("strategist", END)
-    workflow.add_edge("strategist", "blog_writer")
+    workflow.add_edge(
+    "strategist",
+    "content_dispatcher"
+    )
+
+    workflow.add_conditional_edges(
+    "content_dispatcher",
+    route_content,
+    {
+        "blog_writer": "blog_writer",
+        "linkedin_writer": "linkedin_writer",
+    }
+    )
+    
     workflow.add_edge("blog_writer", END)
     workflow.add_edge("fallback", END)
 
     return workflow.compile()
 
+workflow_app = __build_workflow()
 def run_workflow(state: dict):
 
     start = time.time()
@@ -69,14 +122,11 @@ def run_workflow(state: dict):
         # INITIAL STATE
         # =========================
         state["status"] = "running"
-        state["workflow_step"] = "workflow_started"
+        state["workflow_step"] = WORKFLOW_STARTED
 
-    
-        workflow_app = __build_workflow()
-     
         result = workflow_app.invoke(state)
         
-        print("WORKFLOW_RESULT:", result)
+        #print("WORKFLOW_RESULT:", result)
 
         if result.get("status") == "failed":
             return result
@@ -88,15 +138,15 @@ def run_workflow(state: dict):
             start=start,
             answer=result.get("answer"),
             status=status,
-            trace_action="workflow_completed"
+            trace_action=WORKFLOW_COMPLETED
             )
         return results
     
     except Exception as e:
-        print("QUERY_HANDLER_ERROR:", repr(e))
+        #print("QUERY_HANDLER_ERROR:", repr(e))
         state.setdefault("errors", []).append(str(e))
         state["status"] = "failed"
-        state["workflow_step"] = "workflow_failed"
+        state["workflow_step"] = WORKFLOW_FAILED
         return state
 
     

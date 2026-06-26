@@ -1,8 +1,9 @@
 import time
 from src.workflows.state_management import AgentState,set_state
 from src.prompts.prompt import BLOG_WRITER_PROMPT
-from src.core.config import (BLOG_GENERATED ,BLOG_COMPLETED, BLOG_FAILED, BLOG_VALIDATION_FAILED,
-BLOG_GENERATION_FAILED)
+from src.core.config import (BLOG_GENERATED ,BLOG_COMPLETED, 
+BLOG_VALIDATION_FAILED,BLOG_GENERATION_FAILED,LOW_CONFIDENCE,HIGH_CONFIDENCE,
+BLOG_STARTED,BLOG_STRUCTURE_GENERATED)
 from src.integrations.claude_client import claude_client_llm
 from src.tools.utility_tools import word_count_tool
 from src.core.workflow_utils import (
@@ -19,29 +20,64 @@ def blog_writer_agent(state: AgentState) -> AgentState:
     start = time.time()
     query = state.get("user_query")
     content_plan = state.get("content_plan")
+    research_content = state.get("research_content","")
     active_agent = "blog_writer_agent"
     if not validate_query(query):
 
         add_error(state, "Missing blog query")
+        execution_time = round(time.time() - start, 2)
+        return set_state(
+        state=state,
+        status="failed",
+        confidence=LOW_CONFIDENCE,
+        agent=active_agent,
+        trace_action=BLOG_VALIDATION_FAILED,
+        extra={
+            "workflow_step": BLOG_VALIDATION_FAILED,
+            "execution_time": execution_time
+        }
+        )
+    
+    if not content_plan:
+
+        add_error(state, "Missing content strategy")
+
+        execution_time = round(time.time() - start, 2)
 
         return set_state(
         state=state,
         status="failed",
-        confidence=0.2,
+        confidence=LOW_CONFIDENCE,
         agent=active_agent,
         trace_action=BLOG_VALIDATION_FAILED,
         extra={
-            "workflow_step": BLOG_VALIDATION_FAILED
-        }
+            "workflow_step": BLOG_VALIDATION_FAILED,
+            "execution_time": execution_time
+            }
         )
  
     try:
+        add_trace(
+        state,
+        agent=active_agent,
+        action=BLOG_STARTED
+        )
         title = generate_title_tool.invoke(
         {"topic": query}
         )
 
         outline = blog_outline_tool.invoke(
         {"topic": query}
+        )
+        research_section = (
+            research_content
+            if research_content
+            else "No external research was performed. Generate the blog using your existing knowledge."
+            )
+        add_trace(
+        state,
+        agent=active_agent,
+        action=BLOG_STRUCTURE_GENERATED
         )
         prompt = f"""{BLOG_WRITER_PROMPT}
 
@@ -53,6 +89,9 @@ Suggested Title:
 
 Suggested Outline:
 {outline}
+
+Research Context:
+{research_section}
 
 Content Strategy:
 {content_plan}"""
@@ -70,11 +109,11 @@ Content Strategy:
         agent=active_agent,
         action=BLOG_GENERATED
         )
-
+        execution_time = round(time.time() - start, 2)
         return set_state(
         state=state,
         answer=blog_content,
-        confidence=0.9,
+        confidence=HIGH_CONFIDENCE,
         status="success",
         agent=active_agent,
         trace_action=BLOG_GENERATED,
@@ -82,21 +121,22 @@ Content Strategy:
         "title": title,
         "outline": outline,
         "word_count": word_count,
-        "blog_content": blog_content,
-        "workflow_step": BLOG_COMPLETED
+        "workflow_step": BLOG_COMPLETED,
+        "execution_time": execution_time
     }
 )
 
     except Exception as e:
         add_error(state, str(e))
-
+        execution_time = round(time.time() - start, 2)
         return set_state(
             state=state,
             status="failed",
-            confidence=0.2,
+            confidence=LOW_CONFIDENCE,
             agent=active_agent,
             trace_action=BLOG_GENERATION_FAILED,
             extra={
-                "workflow_step": BLOG_FAILED
+                "workflow_step": BLOG_GENERATION_FAILED,
+                "execution_time": execution_time
             }
         )

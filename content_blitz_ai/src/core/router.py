@@ -1,26 +1,24 @@
-from src.agents.blog_writer_agent import blog_writer_agent
-from src.agents.linkedin_writer_agent import linkedin_writer_agent
+
 from src.agents.research_agent import research_agent
 from src.agents.fallback_agent import fallback_agent
-from src.core.workflow_utils import add_trace
+from src.agents.image_agent import image_agent
+from src.workflows.blog_workflow import blog_workflow
+from src.workflows.linkedin_workflow import linkedin_workflow
 
 def route_workflow(state):
 
     category = state.get("current_intent")
 
-    add_trace(
-    state,
-    agent="router",
-    action=f"routing_to_{category}"
-    )
-
     if category == "blog":
-        return blog_writer_agent(state)
+        return blog_workflow(state)
 
     elif category == "linkedin":
-        return linkedin_writer_agent(state)
+        return linkedin_workflow(state)
 
     elif category == "research":
         return research_agent(state)
+
+    elif category == "image":
+        return image_agent(state)
 
     return fallback_agent(state)

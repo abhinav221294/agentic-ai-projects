@@ -18,29 +18,63 @@ from src.core.workflow_utils import (
 )
 
 from src.core.config import (LINKEDIN_GENERATED,LINKEDIN_COMPLETED,
- LINKEDIN_VALIDATION_FAILED,LINKEDIN_FAILED)
+ LINKEDIN_VALIDATION_FAILED,LINKEDIN_FAILED,LOW_CONFIDENCE,HIGH_CONFIDENCE,
+ LINKEDIN_STARTED,LINKEDIN_STRUCTURE_GENERATED)
 
 def linkedin_writer_agent(state: AgentState) -> AgentState:
     start = time.time()
     query = state.get('user_query')
     content_plan = state.get("content_plan")
     active_agent = "linkedin_writer_agent"
+    research_content = state.get(
+    "research_content",
+    ""
+    )
+
+    research_section = (
+    research_content
+    if research_content
+    else "No external research was performed. Generate the LinkedIn post using your existing knowledge."
+    )
+
     if not validate_query(query):
         add_error(state,"Missing LinkedIn query")
-
+        execution_time = round(time.time() - start, 2)
         return set_state(
             state=state,
             start=start,
             status="failed",
-            confidence=0.2,
+            confidence=LOW_CONFIDENCE,
             agent=active_agent,
             trace_action=LINKEDIN_VALIDATION_FAILED,
             extra={
-                "workflow_step": LINKEDIN_VALIDATION_FAILED
+                "workflow_step": LINKEDIN_VALIDATION_FAILED,
+                 "execution_time": execution_time
             }
         )
     
+    if not content_plan:
+
+        add_error(state, "Missing content strategy")
+        execution_time = round(time.time() - start, 2)
+        return set_state(
+        state=state,
+        start=start,
+        status="failed",
+        confidence=LOW_CONFIDENCE,
+        agent=active_agent,
+        trace_action=LINKEDIN_VALIDATION_FAILED,
+        extra={
+            "workflow_step": LINKEDIN_VALIDATION_FAILED,
+             "execution_time": execution_time
+        }
+    )
     try:
+        add_trace(
+            state,
+            agent=active_agent,
+            action=LINKEDIN_STARTED
+        )
         hook = linkedin_hook_tool.invoke(
             {"topic":query}
         )
@@ -52,7 +86,7 @@ def linkedin_writer_agent(state: AgentState) -> AgentState:
         add_trace(
             state,
             agent=active_agent,
-            action="linkedin_structure_generated"
+            action=LINKEDIN_STRUCTURE_GENERATED
         )
 
         prompt = f"""{LINKEDIN_WRITER_PROMPT}
@@ -65,6 +99,9 @@ Suggested Hook:
 
 Suggested CTA:
 {cta}
+
+Research Context:
+{research_section}
 
 Content Strategy:
 {content_plan}"""
@@ -91,7 +128,7 @@ Content Strategy:
             state=state,
             start=start,
             answer=linkedin_post,
-            confidence=0.9,
+            confidence=HIGH_CONFIDENCE,
             status="success",
             agent=active_agent,
             trace_action=LINKEDIN_GENERATED,
@@ -99,7 +136,6 @@ Content Strategy:
                 "hook":hook,
                 "cta": cta,
                 "word_count":word_count,
-                "linkedin_post": linkedin_post,
                 "workflow_step": LINKEDIN_COMPLETED
 
                 }
@@ -107,15 +143,16 @@ Content Strategy:
     
     except Exception as e:
         add_error(state, str(e))
-
+        execution_time = round(time.time() - start, 2)
         return set_state(
             state=state,
             start=start,
             status="failed",
-            confidence=0.2,
+            confidence=LOW_CONFIDENCE,
             agent=active_agent,
             trace_action=LINKEDIN_FAILED,
             extra={
-                "workflow_step": LINKEDIN_FAILED
+                "workflow_step": LINKEDIN_FAILED,
+                 "execution_time": execution_time
             }
         )
