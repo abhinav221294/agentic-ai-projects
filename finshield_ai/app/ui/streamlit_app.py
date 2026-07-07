@@ -1,16 +1,22 @@
 import streamlit as st
+from rag.rag_pipeline import ask_question
 
 st.title("FinShield AI")
 
-pdf = st.file_uploader(
-    "Upload Policy Document",
-    type=["pdf"]
-)
-
-question = st.text_input(
-    "Ask a question"
-)
+query = st.text_input("Ask a question")
 
 if st.button("Submit"):
 
-    st.success("Pipeline coming tomorrow")
+    with st.spinner("Analyzing policy..."):
+
+        result = ask_question(query)
+
+    st.success("Analysis completed")
+
+    st.markdown(result["answer"])
+
+    with st.expander("Sources"):
+
+        for d in result["sources"]:
+
+            st.write(d)

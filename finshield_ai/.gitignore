@@ -1,9 +1,29 @@
+# Virtual environments
 venv/
-.env
+.venv/
+finshield_ai/
+finshield_ai/Lib/
+finshield_ai/Scripts/
+finshield_ai/Include/
+
+# Python
 __pycache__/
 *.pyc
-.chromadb/
+
+# Environment variables
+.env
+.env.*
+
+# IDE
 .vscode/
 .idea/
-.ipynb_checkpoints/
-.DS_Store
+
+# Logs
+*.log
+
+# ChromaDB
+.chromadb/
+
+# Test files containing secrets
+test_rag.py
+finshield_ai/test_rag.py
