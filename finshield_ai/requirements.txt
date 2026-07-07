@@ -1,0 +1,67 @@
+# UI
+streamlit>=1.47.0
+
+# LangChain ecosystem
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-community>=0.3.0
+langchain-text-splitters>=0.3.0
+
+# Agent framework
+langgraph>=0.6.0
+
+# Embeddings
+sentence-transformers>=5.0.0
+
+# Vector DB
+chromadb>=1.0.0
+
+# PDF Processing
+pymupdf>=1.26.0
+pypdf>=6.0.0
+
+# LLM providers
+fireworks-ai>=0.19.0
+openai>=1.99.0
+
+# Data Science
+pandas>=2.3.0
+numpy>=2.3.0
+scikit-learn>=1.7.0
+
+# Utilities
+python-dotenv>=1.1.0
+tqdm>=4.67.0
+
+# Validation
+pydantic>=2.11.0
+
+# Visualization
+matplotlib>=3.10.0
+plotly>=6.2.0
+
+# API
+fastapi>=0.116.0
+uvicorn>=0.35.0
+
+# HTTP
+requests>=2.32.0
+
+# Environment
+pyyaml>=6.0
+
+# Logging
+loguru>=0.7.0
+
+# Token counting
+tiktoken>=0.11.0
+
+# RAG support
+rank-bm25>=0.2.2
+
+# Optional local inference
+transformers>=4.55.0
+accelerate>=1.10.0
+
+# Docker support
+watchdog>=6.0.0
