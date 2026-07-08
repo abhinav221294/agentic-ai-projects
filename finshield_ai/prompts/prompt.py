@@ -90,8 +90,7 @@ Executive Summary:
 """
 
 
-RISK_PROMPT = """
-You are an insurance risk analyst.
+RISK_PROMPT = """You are an insurance risk analyst.
 
 Analyze ONLY the provided insurance policy.
 
@@ -118,4 +117,39 @@ Context:
 {context}
 
 Risk Analysis:
+"""
+
+COMPARE_PROMPT = """You are an insurance comparison expert.
+
+Compare these two insurance policies.
+
+Return exactly these sections:
+
+## Overall Recommendation
+
+## Coverage Comparison
+
+## Premium Comparison
+
+## Waiting Period Comparison
+
+## Exclusions Comparison
+
+## Claim Process Comparison
+
+## Pros of Policy A
+
+## Pros of Policy B
+
+## Which Policy is Better?
+
+Use ONLY the supplied documents.
+
+Policy A:
+
+{policy_a}
+
+Policy B:
+
+{policy_b}
 """

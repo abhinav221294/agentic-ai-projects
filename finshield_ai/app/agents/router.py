@@ -2,12 +2,13 @@ from .insurance_agent import InsuranceAgent
 from .finance_agent import FinanceAgent
 from .risk_agent import RiskAgent
 from .summary_agent import SummaryAgent
+from .comparison_agent import ComparisonAgent
 
 insurance = InsuranceAgent()
 finance = FinanceAgent()
 risk = RiskAgent()
 summary = SummaryAgent()
-
+comparison = ComparisonAgent()
 
 def route(analysis_type, query, pdf_path):
 
@@ -30,6 +31,12 @@ def route(analysis_type, query, pdf_path):
         return {
             "agent": "Insurance Agent",
             "result": insurance.run(query)
+        }
+
+    elif analysis_type == "Compare Policies":
+        return {
+        "agent": "Comparison Agent",
+        "result": comparison.run(pdf_path_a, pdf_path_b)
         }
 
     return {
