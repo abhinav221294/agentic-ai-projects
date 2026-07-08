@@ -11,6 +11,7 @@ type Message = {
 };
 
 function App() {
+  const [loading,setLoading] = useState(false)
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -26,7 +27,7 @@ function App() {
   const handleSend = async (query: string) => {
 
     try {
-
+      setLoading(true)
       setMessages(prev => [
         ...prev,
         {
@@ -34,6 +35,7 @@ function App() {
           text: query
         }
       ]);
+      
 
       const response = await api.post(
         "/generate",
@@ -54,21 +56,23 @@ function App() {
             "Response received."
         }
       ]);
-
     }
 
     catch (error) {
-
       console.error(error);
 
     }
+  
+  finally{
+    setLoading(false)
+
+  }
 
   };
 
   return (
 
     <div
-
 style={{
 
 width:"1000px",
@@ -81,45 +85,33 @@ display:"flex",
 
 flexDirection:"column",
 
-padding:"20px",
-
-boxSizing:"border-box"
+overflow:"hidden"
 
 }}
 
 >
 
-      <h1
+<h1>
 
-        style={{
+Content Blitz AI
 
-          fontSize: "42px",
+</h1>
 
-          textAlign: "center",
+<ChatWindow
 
-          marginBottom: "20px"
+messages={messages}
 
-        }}
+/>
 
-      >
+<PromptBox
 
-        Content Blitz AI
+onSend={handleSend}
 
-      </h1>
+loading={loading}
 
-      <ChatWindow
+/>
 
-        messages={messages}
-
-      />
-
-      <PromptBox
-
-        onSend={handleSend}
-
-      />
-
-    </div>
+</div>
 
   );
 

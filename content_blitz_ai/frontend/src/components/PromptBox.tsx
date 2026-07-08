@@ -4,11 +4,15 @@ type Props = {
 
   onSend:(query:string)=>void
 
+  loading:boolean
+
 }
 
 function PromptBox({
 
-  onSend
+  onSend,
+
+  loading
 
 }:Props){
 
@@ -24,21 +28,29 @@ setQuery
 
 useState("")
 
+const handleClick = ()=>{
+
+if(!query.trim())
+
+return
+
+onSend(query)
+
+setQuery("")
+
+}
+
 return(
 
 <div
 
 style={{
 
-width:"800px",
-
-margin:"0 auto",
-
 display:"flex",
 
 gap:"12px",
 
-marginTop:"20px"
+paddingBottom:"20px"
 
 }}
 
@@ -66,6 +78,8 @@ fontSize:"16px"
 
 value={query}
 
+disabled={loading}
+
 onChange={(e)=>
 
 setQuery(
@@ -88,33 +102,29 @@ padding:"14px 20px",
 
 borderRadius:"10px",
 
-cursor:"pointer",
-
-background:"#2563EB",
-
-border:"none",
-
-color:"white",
-
-fontWeight:"600"
+cursor:"pointer"
 
 }}
 
-onClick={()=>{
+disabled={loading}
 
-if(!query.trim())
-
-return
-
-onSend(query)
-
-setQuery("")
-
-}}
+onClick={handleClick}
 
 >
 
-Send
+{
+
+loading
+
+?
+
+"Thinking..."
+
+:
+
+"Send"
+
+}
 
 </button>
 

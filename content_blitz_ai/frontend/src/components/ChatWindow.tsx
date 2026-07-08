@@ -30,14 +30,15 @@ flex:1,
 
 overflowY:"auto",
 
-width:"800px",
+padding:"20px",
 
-margin:"0 auto",
+display:"flex",
 
-padding:"20px 0"
+flexDirection:"column",
+
+gap:"20px"
 
 }}
-
 >
 
 {

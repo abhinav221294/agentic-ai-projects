@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import HTTPException
 from src.workflows.content_workflow import run_workflow
 from src.core.state_initializer import create_initial_state
+from fastapi.middleware.cors import CORSMiddleware
 
 # =========================
 # REQUEST MODEL
@@ -34,6 +35,17 @@ app = FastAPI(
     title="Content Blitz AI",
     description="Multi-Agent Content Generation Platform built using LangGraph",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.get("/")

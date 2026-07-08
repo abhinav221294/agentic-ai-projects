@@ -1,3 +1,5 @@
+import ReactMarkdown from "react-markdown"
+
 type Props = {
 
 role:string
@@ -56,21 +58,53 @@ isUser
 
 "#1E293B",
 
-padding:"14px",
+padding:
 
-borderRadius:"12px",
+isUser
 
-maxWidth:"70%",
+?
+
+"16px"
+
+:
+
+"24px",
+
+borderRadius:"16px",
+
+maxWidth:
+
+isUser
+
+?
+
+"60%"
+
+:
+
+"90%",
 
 marginBottom:"20px",
 
-color:"white"
+color:"white",
+
+lineHeight:"1.7",
+
+wordBreak:"break-word",
+
+boxShadow:
+
+"0 2px 8px rgba(0,0,0,0.25)"
 
 }}
 
 >
 
+<ReactMarkdown>
+
 {text}
+
+</ReactMarkdown>
 
 </div>
 
