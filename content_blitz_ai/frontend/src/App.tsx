@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import ChatWindow from "./components/ChatWindow";
 import PromptBox from "./components/PromptBox";
+import Sidebar from "./components/Sidebar";
 
 import api from "./services/api";
 
@@ -72,12 +73,27 @@ function App() {
 
   return (
 
-    <div
+<div
+
+style={{
+
+display:"flex",
+
+height:"100vh",
+
+overflow:"hidden"
+
+}}
+
+>
+
+<Sidebar/>
+
+<div
+
 style={{
 
 width:"1000px",
-
-height:"100vh",
 
 margin:"0 auto",
 
@@ -91,7 +107,17 @@ overflow:"hidden"
 
 >
 
-<h1>
+<h1
+
+style={{
+
+textAlign:"center",
+
+margin:"20px 0"
+
+}}
+
+>
 
 Content Blitz AI
 
@@ -113,7 +139,9 @@ loading={loading}
 
 </div>
 
-  );
+</div>
+
+);
 
 }
 
