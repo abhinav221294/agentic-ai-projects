@@ -1,22 +1,28 @@
 import streamlit as st
-from rag.rag_pipeline import ask_question
+from app.agents.router import route
 
-st.title("FinShield AI")
+st.title("🏠 FinShield AI")
 
 query = st.text_input("Ask a question")
 
 if st.button("Submit"):
 
-    with st.spinner("Analyzing policy..."):
+    if not query.strip():
+        st.warning("Please enter a question.")
+        st.stop()
 
-        result = ask_question(query)
+    with st.spinner("Analyzing..."):
 
-    st.success("Analysis completed")
+        response = route(query)
 
-    st.markdown(result["answer"])
+    st.success(f"Selected Agent: {response['agent']}")
 
-    with st.expander("Sources"):
+    st.subheader("Answer")
+    st.markdown(response["result"]["answer"])
 
-        for d in result["sources"]:
+    with st.expander("Retrieved Context"):
 
-            st.write(d)
+        for i, doc in enumerate(response["result"]["sources"], start=1):
+            st.markdown(f"**Source {i}**")
+            st.write(doc)
+            st.divider()
