@@ -1,10 +1,12 @@
 from .insurance_agent import InsuranceAgent
 from .finance_agent import FinanceAgent
 from .risk_agent import RiskAgent
+from .summary_agent import SummaryAgent
 
 insurance = InsuranceAgent()
 finance = FinanceAgent()
 risk = RiskAgent()
+summary = SummaryAgent()
 
 
 def route(query):

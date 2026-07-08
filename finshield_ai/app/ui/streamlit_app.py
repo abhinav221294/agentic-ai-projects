@@ -1,17 +1,65 @@
 import streamlit as st
 from app.agents.router import route
 
+st.set_page_config(
+    page_title="FinShield AI",
+    page_icon="🏠",
+    layout="wide"
+)
+
 st.title("🏠 FinShield AI")
+st.caption("AI-powered Insurance Policy Intelligence")
 
-query = st.text_input("Ask a question")
+# -------------------------
+# Upload Policy
+# -------------------------
 
-if st.button("Submit"):
+uploaded_policy = st.file_uploader(
+    "Upload Insurance Policy",
+    type=["pdf"]
+)
 
-    if not query.strip():
+# -------------------------
+# Analysis Type
+# -------------------------
+
+analysis_type = st.selectbox(
+    "Choose Analysis",
+    [
+        "Ask Question",
+        "Executive Summary",
+        "Risk Analysis",
+        "Explain Clause"
+    ]
+)
+
+# -------------------------
+# Question
+# -------------------------
+
+query = ""
+
+if analysis_type == "Ask Question":
+    query = st.text_input("Ask a question")
+
+elif analysis_type == "Explain Clause":
+    query = st.text_area("Paste the clause")
+
+# -------------------------
+# Analyze
+# -------------------------
+
+if st.button("Analyze"):
+
+    if uploaded_policy is None:
+        st.warning("Please upload an insurance policy.")
+        st.stop()
+
+    if analysis_type in ["Ask Question", "Explain Clause"] and not query.strip():
         st.warning("Please enter a question.")
         st.stop()
 
-    with st.spinner("Analyzing..."):
+    with st.spinner("Analyzing policy..."):
 
         response = route(query)
 
