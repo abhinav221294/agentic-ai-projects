@@ -1,4 +1,4 @@
-from rag.vector_store import retrieve
+from rag.loader import load_pdf
 from prompts.prompt import SUMMARY_PROMPT
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
@@ -12,23 +12,20 @@ llm = ChatGroq(
 )
 
 
-def generate_summary():
+def generate_summary(pdf_path):
 
-    response = retrieve(
-        "Provide an overview of the insurance policy."
-    )
+    text = load_pdf(pdf_path)
 
-    docs = response["documents"][0]
-
-    context = "\n\n".join(docs)
+    # Limit context if document is large
+    context = text[:12000]
 
     prompt = SUMMARY_PROMPT.format(
         context=context
     )
 
-    answer = llm.invoke(prompt)
+    response = llm.invoke(prompt)
 
     return {
-        "answer": answer.content,
-        "sources": docs
+        "answer": response.content,
+        "sources": []      # Keep response format consistent
     }

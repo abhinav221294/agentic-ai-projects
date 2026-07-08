@@ -2,14 +2,13 @@ from rag.loader import load_pdf
 from rag.splitter import split_text
 from rag.vector_store import add_chunks
 
-pdf_path = "data/insurance/griha-brochure-uid-7869-416415238450.pdf"
 
-text = load_pdf(pdf_path)
+def ingest_document(pdf_path):
 
-chunks = split_text(text)
+    text = load_pdf(pdf_path)
 
-add_chunks(
-    chunks
-)
+    chunks = split_text(text)
 
-print("Indexed successfully")
+    add_chunks(chunks)
+
+    print(f"Indexed {len(chunks)} chunks successfully.")

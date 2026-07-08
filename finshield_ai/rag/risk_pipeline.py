@@ -1,4 +1,4 @@
-from rag.vector_store import retrieve
+from rag.loader import load_pdf
 from prompts.prompt import RISK_PROMPT
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
@@ -12,23 +12,20 @@ llm = ChatGroq(
 )
 
 
-def analyze_risk():
+def analyze_risk(pdf_path):
 
-    response = retrieve(
-        "Identify the major risks and exclusions in this insurance policy."
-    )
+    text = load_pdf(pdf_path)
 
-    docs = response["documents"][0]
-
-    context = "\n\n".join(docs)
+    # Limit context for large PDFs
+    context = text[:12000]
 
     prompt = RISK_PROMPT.format(
         context=context
     )
 
-    answer = llm.invoke(prompt)
+    response = llm.invoke(prompt)
 
     return {
-        "answer": answer.content,
-        "sources": docs
+        "answer": response.content,
+        "sources": []
     }

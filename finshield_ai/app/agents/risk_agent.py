@@ -1,8 +1,8 @@
-from rag.rag_pipeline import ask_question
+from rag.risk_pipeline import analyze_risk
 
 
 class RiskAgent:
 
-    def run(self, query):
+    def run(self, pdf_path):
 
-        return ask_question(query)
+        return analyze_risk(pdf_path)

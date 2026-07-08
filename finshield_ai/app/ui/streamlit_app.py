@@ -1,5 +1,7 @@
 import streamlit as st
 from app.agents.router import route
+from app.utils.file_handler import save_uploaded_file
+from rag.ingest import ingest_document
 
 st.set_page_config(
     page_title="FinShield AI",
@@ -59,18 +61,43 @@ if st.button("Analyze"):
         st.warning("Please enter a question.")
         st.stop()
 
-    with st.spinner("Analyzing policy..."):
+    try:
+        with st.spinner("📄 Processing document and generating response..."):
 
-        response = route(query)
+            pdf_path = save_uploaded_file(uploaded_policy)
 
-    st.success(f"Selected Agent: {response['agent']}")
+            ingest_document(pdf_path)
 
-    st.subheader("Answer")
-    st.markdown(response["result"]["answer"])
+            response = route(
+            analysis_type,
+            query,
+            pdf_path
+            )
 
-    with st.expander("Retrieved Context"):
+        st.success(f"🤖 Agent Used: {response['agent']}")
 
-        for i, doc in enumerate(response["result"]["sources"], start=1):
-            st.markdown(f"**Source {i}**")
-            st.write(doc)
-            st.divider()
+        st.subheader("Answer")
+        st.markdown(response["result"]["answer"])
+
+        sources = response["result"].get("sources", [])
+
+        if sources:
+            with st.expander("Retrieved Context"):
+                for i, doc in enumerate(sources, start=1):
+                    st.markdown(f"**Source {i}**")
+                    st.write(doc)
+                    st.divider()
+
+        # -----------------------------------
+        # Footer
+        # -----------------------------------
+
+        st.divider()
+
+        st.caption(
+        "🏠 FinShield AI | AI-Powered Insurance Policy Intelligence | "
+        "Groq • ChromaDB • Sentence Transformers • Streamlit"
+        )   
+
+    except Exception as e:
+        st.error(f"An error occurred: {e}")

@@ -9,51 +9,27 @@ risk = RiskAgent()
 summary = SummaryAgent()
 
 
-def route(query):
+def route(analysis_type, query, pdf_path):
 
-    q = query.lower()
+    if analysis_type == "Executive Summary":
+        print(type(summary))
+        print(summary)
+        print(pdf_path)
+        return {
+            "agent": "Summary Agent",
+            "result": summary.run(pdf_path)
+        }
 
-    insurance_keywords = [
-        "policy",
-        "coverage",
-        "claim",
-        "premium",
-        "exclusion",
-        "insurance"
-    ]
+    elif analysis_type == "Risk Analysis":
+        return {
+            "agent": "Risk Agent",
+            "result": risk.run(pdf_path)
+        }
 
-    finance_keywords = [
-        "revenue",
-        "profit",
-        "cash flow",
-        "balance sheet",
-        "income",
-        "finance"
-    ]
-
-    risk_keywords = [
-        "risk",
-        "exposure",
-        "loss",
-        "fraud"
-    ]
-
-    if any(k in q for k in insurance_keywords):
+    elif analysis_type == "Ask Question":
         return {
             "agent": "Insurance Agent",
             "result": insurance.run(query)
-        }
-
-    elif any(k in q for k in finance_keywords):
-        return {
-            "agent": "Finance Agent",
-            "result": finance.run(query)
-        }
-
-    elif any(k in q for k in risk_keywords):
-        return {
-            "agent": "Risk Agent",
-            "result": risk.run(query)
         }
 
     return {

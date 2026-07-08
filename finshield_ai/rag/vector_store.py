@@ -15,16 +15,18 @@ collection = client.get_or_create_collection(
 
 def add_chunks(chunks):
 
+    # Clear previous document
+    existing = collection.get()
+
+    if existing["ids"]:
+        collection.delete(ids=existing["ids"])
+
     vectors = model.encode(chunks)
 
     collection.add(
-
         documents=chunks,
-
         embeddings=vectors.tolist(),
-
         ids=[str(i) for i in range(len(chunks))]
-
     )
 
 
@@ -33,11 +35,8 @@ def retrieve(query):
     q = model.encode([query])
 
     results = collection.query(
-
         query_embeddings=q.tolist(),
-
         n_results=3
-
     )
 
     return results
