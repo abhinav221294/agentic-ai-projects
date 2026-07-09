@@ -10,7 +10,13 @@ risk = RiskAgent()
 summary = SummaryAgent()
 comparison = ComparisonAgent()
 
-def route(analysis_type, query, pdf_path):
+def route(
+    analysis_type,
+    query=None,
+    pdf_path=None,
+    pdf_path_a=None,
+    pdf_path_b=None
+):
 
     if analysis_type == "Executive Summary":
         print(type(summary))

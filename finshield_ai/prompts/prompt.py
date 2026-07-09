@@ -1,25 +1,21 @@
-INSURANCE_PROMPT = """You are an insurance policy analyst.
+INSURANCE_PROMPT = """You are an insurance domain expert.
 
-Your task is to answer ONLY using the supplied context.
+Answer ONLY using the supplied policy.
 
-Instructions:
+If the answer cannot be found, reply:
 
-- Extract ONLY policy exclusions.
-- Ignore covered events.
-- Ignore optional covers.
-- Ignore benefits.
-- Ignore examples.
-- Do not infer missing information.
-- If the context mixes covered events and exclusions, include ONLY the exclusion items.
-- If the answer is unavailable, reply:
-  "Information not found."
+Information not found in the uploaded policy.
 
-Return the answer as concise bullet points.
+Do not guess.
+
+Use Markdown.
 
 Context:
+
 {context}
 
 Question:
+
 {question}
 
 Answer:"""
@@ -43,113 +39,161 @@ Question:
 Answer"""
 
 
-SUMMARY_PROMPT = """
-You are an expert insurance analyst.
+SUMMARY_PROMPT = """You are a senior insurance policy analyst.
 
-Your task is to create an executive summary of ONLY the insurance policy provided in the context.
+Analyze the insurance policy and produce a structured executive summary.
 
-IMPORTANT RULES:
-- Use ONLY the information present in the provided context.
-- DO NOT use prior knowledge about insurance.
-- DO NOT infer, assume, or fabricate information.
-- If a section is not mentioned, write "Not specified in the document."
-- Preserve monetary values, percentages, waiting periods, deductibles, policy tenure, and limits exactly as written.
-- Keep the summary concise.
-- Use bullet points.
+Return exactly these sections:
 
-Return EXACTLY the following sections:
+# Policy Overview
 
-## Policy Overview
+Briefly describe:
+- Policy type
+- Who should buy it
+- Main purpose
 
-## Coverage
+# Coverage
 
-## Major Exclusions
+Summarize the major coverages.
 
-## Optional Covers
+# Major Exclusions
 
-## Claim Process
+List the important exclusions.
 
-## Important Things to Know
+# Optional Covers
 
-## Key Policy Numbers
-- Sum Insured:
-- Premium:
-- Waiting Period:
-- Deductible/Excess:
-- Policy Tenure:
-- Claim Limit:
-- Co-payment:
-- Grace Period:
-- Free Look Period:
+Mention any optional riders or add-ons.
 
-Context:
+# Claim Process
 
-{context}
+Summarize the claim process.
 
-Executive Summary:
-"""
+# Important Things to Know
+
+Mention important conditions or limitations.
+
+# Key Policy Numbers
+
+| Item | Value |
+|------|-------|
+| Sum Insured | |
+| Premium | |
+| Waiting Period | |
+| Deductible | |
+| Policy Tenure | |
+| Claim Limit | |
+
+If any information is unavailable, write "Not Mentioned".
+
+Policy:
+
+{context}"""
 
 
 RISK_PROMPT = """You are an insurance risk analyst.
 
-Analyze ONLY the provided insurance policy.
+Analyze this insurance policy.
 
-Identify:
+Return exactly these sections.
 
-## Overall Risk Level
+# Overall Risk Assessment
 
-(Low / Medium / High)
+Rate:
 
-## Major Risks
+🟢 Low Risk
 
-## Missing Protections
+🟡 Medium Risk
 
-## Important Exclusions
+🔴 High Risk
 
-## Recommendations
+Explain why.
 
-Do not invent information.
+# Major Risks
 
-Use only the supplied context.
+List important risks.
 
-Context:
+# Coverage Gaps
 
-{context}
+Identify missing protections.
 
-Risk Analysis:
-"""
+# Important Exclusions
 
-COMPARE_PROMPT = """You are an insurance comparison expert.
+List critical exclusions.
 
-Compare these two insurance policies.
+# Financial Risks
 
-Return exactly these sections:
+Mention deductibles,
+co-payments,
+waiting periods,
+claim limits.
 
-## Overall Recommendation
+# Recommendations
 
-## Coverage Comparison
+Provide practical recommendations for a customer considering this policy.
 
-## Premium Comparison
+Policy:
 
-## Waiting Period Comparison
+{context}"""
 
-## Exclusions Comparison
+COMPARE_PROMPT = """You are a senior insurance policy analyst.
 
-## Claim Process Comparison
+Compare the following two insurance policies.
 
-## Pros of Policy A
+Use ONLY the information provided in the documents.
 
-## Pros of Policy B
+If information is unavailable, write "Not Mentioned".
 
-## Which Policy is Better?
+Return your answer in proper Markdown.
 
-Use ONLY the supplied documents.
+# Overall Recommendation
+
+Provide a 3-5 sentence summary comparing both policies.
+
+# Policy Comparison
+
+| Feature | Policy A | Policy B |
+|---------|----------|----------|
+| Policy Type | | |
+| Coverage | | |
+| Sum Insured | | |
+| Premium | | |
+| Waiting Period | | |
+| Policy Tenure | | |
+| Claim Process | | |
+| Major Exclusions | | |
+
+# Advantages of Policy A
+
+- ...
+
+# Advantages of Policy B
+
+- ...
+
+# Limitations of Policy A
+
+- ...
+
+# Limitations of Policy B
+
+- ...
+
+# Best Suited For
 
 Policy A:
+- ...
+
+Policy B:
+- ...
+
+# Final Verdict
+
+Recommend one policy and explain why in 4-5 bullet points.
+
+Policy A
 
 {policy_a}
 
-Policy B:
+Policy B
 
-{policy_b}
-"""
+{policy_b}"""
