@@ -1,11 +1,12 @@
 import chromadb
 
 from rag.embeddings import get_embedding_model
+from app.config import CHROMADB_PATH,TOP_K  
 
 model = get_embedding_model()
 
 client = chromadb.PersistentClient(
-    path=".chromadb"
+    path=CHROMADB_PATH
 )
 
 collection = client.get_or_create_collection(
@@ -36,7 +37,7 @@ def retrieve(query):
 
     results = collection.query(
         query_embeddings=q.tolist(),
-        n_results=3
+        n_results=TOP_K
     )
 
     return results

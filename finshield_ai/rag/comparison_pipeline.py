@@ -1,15 +1,10 @@
 from rag.loader import load_pdf
 from prompts.prompt import COMPARE_PROMPT
-from langchain_groq import ChatGroq
+from llm.groq_client import llm
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
-
-llm = ChatGroq(
-    model="llama-3.1-8b-instant",
-    api_key=os.getenv("GROQ_API_KEY")
-)
 
 
 def compare_policies(pdf_path_a, pdf_path_b):

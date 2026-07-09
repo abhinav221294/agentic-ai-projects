@@ -1,23 +1,8 @@
 from rag.vector_store import retrieve
 #from transformers import pipeline
 from prompts.prompt import INSURANCE_PROMPT
-from langchain_groq import ChatGroq
-from dotenv import load_dotenv
-import os
+from app.llm.groq_client import llm
 
-
-load_dotenv()
-
-#generator = pipeline(
-#    "text-generation",
-#    model="microsoft/Phi-3-mini-4k-instruct"
-#)
-
-llm = ChatGroq(
-
-    model_name="llama-3.1-8b-instant",
-    api_key=os.getenv("GROQ_API_KEY")
-    )
 
 def ask_question(question):
 

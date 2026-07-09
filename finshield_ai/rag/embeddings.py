@@ -1,8 +1,9 @@
 from sentence_transformers import SentenceTransformer
+from app.config import EMBEDDING_MODEL
 
 model = SentenceTransformer(
 
-    "all-MiniLM-L6-v2"
+    EMBEDDING_MODEL
 
 )
 
