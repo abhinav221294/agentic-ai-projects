@@ -83,33 +83,43 @@ Comparison includes:
 # 🏗 System Architecture
 
 ```
-                        User
-                          │
-                          ▼
-                 Streamlit Web UI
-                          │
-                          ▼
+                                                User
+                           │
+                           ▼
+                  Streamlit Web UI
+                           │
+                           ▼
                     Router Agent
-                          │
+                           │
       ┌──────────┬──────────┬──────────┬──────────┐
       │          │          │          │
       ▼          ▼          ▼          ▼
  Insurance   Summary     Risk     Comparison
    Agent      Agent      Agent       Agent
-      │          │          │          │
       └──────────┴──────────┴──────────┘
-                     │
-                     ▼
-                RAG Pipeline
-                     │
-     ┌───────────────┴────────────────┐
-     │                                │
-     ▼                                ▼
-Sentence Transformers            ChromaDB
-     │                                │
-     └───────────────┬────────────────┘
-                     ▼
-                Groq LLM
+                           │
+                           ▼
+                     RAG Pipeline
+                           │
+         ┌─────────────────┴─────────────────┐
+         │                                   │
+         ▼                                   ▼
+ PDF Processing                  User Question
+         │                                   │
+         ▼                                   │
+Sentence Transformers                         │
+         │                                   │
+         ▼                                   │
+     ChromaDB (Vector Store) ◄───────────────┘
+                 │
+                 ▼
+      Retrieve Relevant Chunks
+                 │
+                 ▼
+             Groq LLM
+                 │
+                 ▼
+          AI Generated Response
 ```
 
 ---
