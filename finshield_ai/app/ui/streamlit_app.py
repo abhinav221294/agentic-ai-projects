@@ -10,6 +10,9 @@ st.set_page_config(
     layout="wide"
 )
 
+if "response" not in st.session_state:
+    st.session_state.response = None
+
 def load_css():
 
     with open("app/ui/style.css") as f:
@@ -110,213 +113,246 @@ Upload two policies to compare them.
 # Two-column Layout
 # ============================================
 
-left, right = st.columns([1, 2], gap="large")
+#left, right = st.columns([1, 2], gap="large")
 
 # --------------------------------------------
 # LEFT COLUMN
 # --------------------------------------------
+
+left, right = st.columns([1, 1])
 
 with left:
 
     st.subheader("⚙️ Analysis")
 
     analysis_type = st.selectbox(
-        "Choose Analysis",
-        [
+            "Choose Analysis",
+            [
             "❓ Ask Question",
             "📄 Executive Summary",
             "⚠️ Risk Analysis",
             "📘 Explain Clause",
             "⚖️ Compare Policies"
         ]
-    )
+        )
 
     analysis_type = (
-        analysis_type.replace("❓ ", "")
+    analysis_type.replace("❓ ", "")
                      .replace("📄 ", "")
                      .replace("⚠️ ", "")
                      .replace("📘 ", "")
                      .replace("⚖️ ", "")
-    )
+        )
 
     if analysis_type == "Ask Question":
-        st.caption("💡 Example: What is covered under this policy?")
+            st.caption("💡 Example: What is covered under this policy?")
 
     elif analysis_type == "Executive Summary":
-        st.caption("💡 Generates a structured summary of the uploaded policy.")
+            st.caption("💡 Generates a structured summary of the uploaded policy.")
 
     elif analysis_type == "Risk Analysis":
-        st.caption("💡 Identifies risks, exclusions and coverage gaps.")
+            st.caption("💡 Identifies risks, exclusions and coverage gaps.")
 
     elif analysis_type == "Compare Policies":
-        st.caption("💡 Upload two policies to compare them.")
+            st.caption("💡 Upload two policies to compare them.")
 
     elif analysis_type == "Explain Clause":
-        st.caption("💡 Paste an insurance clause to get a plain-English explanation.")
+            st.caption("💡 Paste an insurance clause to get a plain-English explanation.")
 
     if analysis_type == "Ask Question":
-        query = st.text_input("Ask a question")
+            query = st.text_input("Ask a question")
 
     elif analysis_type == "Explain Clause":
-        query = st.text_area("Paste the clause")
+            query = st.text_area("Paste the clause")
 
     else:
-        query = ""
+            query = ""
 
-# --------------------------------------------
-# RIGHT COLUMN
-# --------------------------------------------
+    # --------------------------------------------
+    # RIGHT COLUMN
+    # --------------------------------------------
 
 with right:
 
     with st.container(border=True):
+    
 
-        st.subheader("📂 Upload Policy")
+            st.markdown("### 📂 Upload Policy")
 
-        policy_b = None
+            policy_b = None
 
-        upload_label = (
+            upload_label = (
                 "📄 Upload Policy A"
-        if analysis_type == "Compare Policies"
-        else "📄 Upload Insurance Policy"
-        )
+            if analysis_type == "Compare Policies"
+            else "📄 Upload Insurance Policy"
+            )
 
-        policy_a = st.file_uploader(
+            policy_a = st.file_uploader(
             upload_label,
             type=["pdf"],
             key="policy_a"
-        )
+            )
 
-    if policy_a:
-        st.success(f"✅ {policy_a.name}")
+            #if policy_a:
+            #    st.caption(f"✅ {policy_a.name}")
 
-    if analysis_type == "Compare Policies":
+            if analysis_type == "Compare Policies":
 
-        policy_b = st.file_uploader(
-            "📄 Upload Policy B",
-            type=["pdf"],
-            key="policy_b"
-        )
+                policy_b = st.file_uploader(
+                "📄 Upload Policy B",
+                type=["pdf"],
+                key="policy_b"
+                )
 
-        st.caption("Supported format: PDF")
+                st.caption("Supported format: PDF")
 
-        if policy_b:
-            st.success(f"✅ {policy_b.name}")
+            #if policy_b:
+            #    st.success(f"✅ {policy_b.name}")
 
     analyze = st.button(
         "🚀 Analyze Policy",
         use_container_width=True,
         type="primary"
-    )
+        )
 
     if analyze:
 
         if policy_a is None:
-            st.warning("Please upload Policy A.")
-            st.stop()
+                st.warning("Please upload Policy A.")
+                st.stop()
 
         if analysis_type in ["Ask Question", "Explain Clause"] and not query.strip():
-            st.warning("Please enter a question.")
-            st.stop()
+                st.warning("Please enter a question.")
+                st.stop()
 
         if analysis_type == "Compare Policies" and policy_b is None:
-            st.warning("Please upload Policy B.")
-            st.stop()
+                st.warning("Please upload Policy B.")
+                st.stop()
+
+        st.session_state.response = None
 
         try:
-
             with st.spinner(
-                    "🔍 Reading document...\n\n"
-                    "🧠 Retrieving policy context...\n\n"
-                    "🤖 Generating AI response..."
+                "🔍 Reading document...\n\n"
+                "🧠 Retrieving policy context...\n\n"
+                "🤖 Generating AI response..."
                 ):
-            
+
                 pdf_path_a = save_uploaded_file(policy_a)
-                # Existing functionality
+
                 if analysis_type != "Compare Policies":
 
                     ingest_document(pdf_path_a)
 
                     response = route(
-                    analysis_type=analysis_type,
-                    query=query,
-                    pdf_path=pdf_path_a
-                    )
-                    usage = response["result"].get("usage", {})
-                    st.metric("Prompt Tokens", usage.get("prompt_tokens", 0))
-                    st.metric("Completion Tokens", usage.get("completion_tokens", 0))
-                    st.metric("Total Tokens", usage.get("total_tokens", 0))
-                    st.metric("Estimated Cost", f"${usage.get('estimated_cost', 0):.6f}")
+                        analysis_type=analysis_type,
+                        query=query,
+                        pdf_path=pdf_path_a
+                        )
 
-                # Placeholder for comparison
                 else:
+
                     pdf_path_b = save_uploaded_file(policy_b)
+
                     response = route(
-                    analysis_type=analysis_type,
-                    pdf_path_a=pdf_path_a,
-                    pdf_path_b=pdf_path_b
-                    )
+                        analysis_type=analysis_type,
+                        pdf_path_a=pdf_path_a,
+                        pdf_path_b=pdf_path_b
+                        )
 
-            st.divider()
-            st.markdown("## 📊 Analysis Results")
-
-            # Results
-            st.success("✅ Analysis completed successfully.")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.metric(
-                    label="📊 Analysis",
-                    value=analysis_type
-                )
-
-            with col2:
-                st.metric(
-                    label="🤖 AI Agent",
-                    value=response["agent"]
-                )
-
-
-            sources = response["result"].get("sources", [])
-
-            tab1, tab2 = st.tabs(
-                ["📄 Results", "📚 Retrieved Context"]
-                )
-
-            with tab1:
-                st.subheader(f"📄 {analysis_type} Results")
-
-                with st.container(border=True):
-                    st.markdown(response["result"]["answer"])
-                st.download_button(
-                    label="📥 Download Analysis",
-                    data=response["result"]["answer"],
-                    file_name=f"{analysis_type.lower().replace(' ', '_')}_analysis.txt",
-                    mime="text/plain"
-                    )
-
-            with tab2:
-
-                if sources:
-
-                    for i, doc in enumerate(sources, start=1):
-                        st.markdown(f"### Source {i}")
-                        st.write(doc)
-                        st.divider()
-
-                else:
-
-                    st.info("No retrieved context available.")
-
-            st.warning(
-                    "⚠️ AI-generated insights are based only on the uploaded documents. "
-                    "Please review the original policy before making insurance decisions."
-            )
+                # Save response for ALL analysis types
+                st.session_state.response = response
 
         except Exception as e:
             st.error(str(e))
 
+# ============================================
+# Full Width Results
+# ============================================
+
+if st.session_state.response:
+
+    st.divider()
+    usage = st.session_state.response["result"].get("usage", {})
+    if usage:
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.metric(
+            "Prompt Tokens",
+            usage.get("prompt_tokens", 0)
+            )
+
+            st.metric(
+            "Completion Tokens",
+            usage.get("completion_tokens", 0)
+            )
+
+        with c2:
+            st.metric(
+            "Total Tokens",
+            usage.get("total_tokens", 0)
+            )
+
+            st.metric(
+            "Estimated Cost per 1M Tokens",
+            f"${usage.get('estimated_cost', 0):.6f}"
+            )
+
+    st.markdown("## 📊 Analysis Results")
+
+    st.success("✅ Analysis completed successfully.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric(
+        label="📊 Analysis",
+        value=analysis_type
+        )
+
+    with col2:
+        st.metric(
+            label="🤖 AI Agent",
+            value=st.session_state.response["agent"]
+            )
+
+    sources = st.session_state.response["result"].get("sources", [])
+
+    tab1, tab2 = st.tabs(
+            ["📄 Results", "📚 Retrieved Context"]
+    )
+
+    with tab1:
+
+        st.subheader(f"📄 {analysis_type} Results")
+
+        with st.container(border=True):
+                st.markdown(st.session_state.response["result"]["answer"])
+
+        st.download_button(
+                "📥 Download Analysis",
+            st.session_state.response["result"]["answer"],
+            file_name=f"{analysis_type.lower().replace(' ', '_')}_analysis.txt",
+            mime="text/plain",
+            use_container_width=True
+            )
+
+    with tab2:
+
+        if sources:
+            for i, doc in enumerate(sources, start=1):
+                    st.markdown(f"### Source {i}")
+                    st.write(doc)
+                    st.divider()
+        else:
+            st.info("No retrieved context available.")
+
+        st.warning(
+            "⚠️ AI-generated insights are based only on the uploaded documents. "
+            "Please review the original policy before making insurance decisions."
+        )
 
 
 # --------------------------------------------------

@@ -17,7 +17,7 @@ def ask_question(question):
     prompt = INSURANCE_PROMPT.format(context=context, question=question)
 
     result = llm.invoke(prompt)
-    usage = get_token_usage(response)
+    usage = get_token_usage(result)
 
     return {
 

@@ -1,14 +1,17 @@
 import fitz
 
-
 def load_pdf(path):
 
     doc = fitz.open(path)
 
     text = ""
 
-    for page in doc:
+    for i, page in enumerate(doc):
 
-        text += page.get_text()
+        page_text = page.get_text()
+
+        #print(f"Page {i+1}: {len(page_text)} characters")
+
+        text += page_text
 
     return text

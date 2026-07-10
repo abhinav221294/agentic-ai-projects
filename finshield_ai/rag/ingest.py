@@ -7,8 +7,15 @@ def ingest_document(pdf_path):
 
     text = load_pdf(pdf_path)
 
+    if not text.strip():
+        raise ValueError(
+            "No extractable text found in the PDF. "
+            "This PDF appears to be scanned or image-based."
+        )
+
     chunks = split_text(text)
 
-    add_chunks(chunks)
+    if not chunks:
+        raise ValueError("No chunks could be generated from the document.")
 
-    print(f"Indexed {len(chunks)} chunks successfully.")
+    add_chunks(chunks)

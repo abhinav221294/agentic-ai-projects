@@ -253,30 +253,36 @@ streamlit run app/ui/streamlit_app.py
 ```
 
 ---
-
 # 📸 Screenshots
 
-## Home Page
+## 🏠 Home Page
 
-> Add screenshot here
-
----
-
-## Executive Summary
-
-> Add screenshot here
+![Home Page](img/FinShieldAI_1.jpg)
 
 ---
 
-## Risk Analysis
+## 📄 Executive Summary
 
-> Add screenshot here
+![Executive Summary](img/FinShieldAI_2.jpg)
 
 ---
 
-## Policy Comparison
+## ⚠️ Risk Analysis
 
-> Add screenshot here
+![Risk Analysis](img/FinShieldAI_3.jpg)
+
+---
+
+## 📘 Explain Clause
+
+![Explain Clause](img/FinShieldAI_4.jpg)
+
+---
+
+## ⚖️ Policy Comparison
+
+![Policy Comparison](img/FinShieldAI_5.jpg)
+
 
 ---
 

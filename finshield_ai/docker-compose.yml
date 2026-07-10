@@ -1,0 +1,19 @@
+services:
+  finshield-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: finshield-ai
+
+    ports:
+      - "8501:8501"
+
+    env_file:
+      - .env
+
+    restart: unless-stopped
+
+    volumes:
+      - ./uploads:/app/uploads
+      - ./data/chroma:/app/data/chroma

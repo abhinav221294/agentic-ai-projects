@@ -15,7 +15,7 @@ collection = client.get_or_create_collection(
 
 
 def add_chunks(chunks):
-
+    
     # Clear previous document
     existing = collection.get()
 

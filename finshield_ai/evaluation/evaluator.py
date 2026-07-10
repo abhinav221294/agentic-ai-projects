@@ -10,21 +10,16 @@ from ragas.embeddings import LangchainEmbeddingsWrapper
 
 from evaluation.metrics import METRICS
 from llm.groq_client import get_llm
+from app.config import EMBEDDING_MODEL_NAME
 
-import os
-
-load_dotenv()
-
+EMBEDDING_MODEL_NAME_FULL = "sentence-transformers/" + EMBEDDING_MODEL_NAME
 
 # ----------------------------
 # Judge LLM (Groq)
 # ----------------------------
 
 judge_llm = LangchainLLMWrapper(
-    ChatGroq(
-        model="llama-3.1-8b-instant",
-        api_key=os.getenv("GROQ_API_KEY")
-    )
+    get_llm()
 )
 
 
@@ -34,7 +29,7 @@ judge_llm = LangchainLLMWrapper(
 
 embedding_model = LangchainEmbeddingsWrapper(
     HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+        model_name=EMBEDDING_MODEL_NAME_FULL
     )
 )
 
