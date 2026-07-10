@@ -1,12 +1,12 @@
 import chromadb
 
 from rag.embeddings import get_embedding_model
-from app.config import CHROMADB_PATH,TOP_K  
+from app.config import CHROMA_PATH,TOP_K  
 
 model = get_embedding_model()
 
 client = chromadb.PersistentClient(
-    path=CHROMADB_PATH
+    path=CHROMA_PATH
 )
 
 collection = client.get_or_create_collection(

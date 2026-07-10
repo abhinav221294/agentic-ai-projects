@@ -242,6 +242,11 @@ with right:
                     query=query,
                     pdf_path=pdf_path_a
                     )
+                    usage = response["result"].get("usage", {})
+                    st.metric("Prompt Tokens", usage.get("prompt_tokens", 0))
+                    st.metric("Completion Tokens", usage.get("completion_tokens", 0))
+                    st.metric("Total Tokens", usage.get("total_tokens", 0))
+                    st.metric("Estimated Cost", f"${usage.get('estimated_cost', 0):.6f}")
 
                 # Placeholder for comparison
                 else:

@@ -1,11 +1,9 @@
 from rag.loader import load_pdf
 from prompts.prompt import COMPARE_PROMPT
-from llm.groq_client import llm
-from dotenv import load_dotenv
-import os
+from llm.groq_client import get_llm
+from app.utils.token_usage import get_token_usage
 
-load_dotenv()
-
+llm = get_llm()
 
 def compare_policies(pdf_path_a, pdf_path_b):
 
@@ -18,8 +16,10 @@ def compare_policies(pdf_path_a, pdf_path_b):
     )
 
     response = llm.invoke(prompt)
+    usage = get_token_usage(response)
 
     return {
         "answer": response.content,
-        "sources": []
+        "sources": [],
+        "usage": usage
     }

@@ -1,6 +1,9 @@
 from rag.loader import load_pdf
 from prompts.prompt import SUMMARY_PROMPT
-from app.llm.groq_client import llm
+from llm.groq_client import get_llm
+from app.utils.token_usage import get_token_usage
+
+llm = get_llm()
 
 def generate_summary(pdf_path):
 
@@ -14,8 +17,10 @@ def generate_summary(pdf_path):
     )
 
     response = llm.invoke(prompt)
+    usage = get_token_usage(response)
 
     return {
         "answer": response.content,
-        "sources": []      # Keep response format consistent
+        "sources": [],
+        "usage": usage
     }
