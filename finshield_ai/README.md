@@ -107,7 +107,7 @@ Comparison includes:
  PDF Processing                  User Question
          │                                   │
          ▼                                   │
-Sentence Transformers                         │
+Sentence Transformers                        │
          │                                   │
          ▼                                   │
      ChromaDB (Vector Store) ◄───────────────┘
