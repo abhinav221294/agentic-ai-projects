@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import ChatWindow from "./components/ChatWindow";
 import PromptBox from "./components/PromptBox";
 import Sidebar from "./components/Sidebar";
+import WelcomeScreen from "./components/WelcomeScreen";
 
 import api from "./services/api";
 
@@ -11,65 +12,218 @@ type Message = {
   text: string;
 };
 
+type Conversation = {
+  id: number;
+  title: string;
+  messages: Message[];
+  updatedAt: number
+};
+
 function App() {
   const [loading,setLoading] = useState(false)
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "User",
-      text: "Write a blog on Agentic AI"
-    },
-    {
-      role: "Assistant",
-      text: "Agentic AI is transforming..."
+  const [conversations, setConversations] = useState<Conversation[]>(() => {
+
+    const savedChats = localStorage.getItem(
+        "content-blitz-chats"
+    );
+
+    if (savedChats) {
+        return JSON.parse(savedChats);
     }
-  ]);
 
-  const handleSend = async (query: string) => {
+    return [
+    {
+        id: 1,
+        title: "New Chat 1",
+        messages: [],
+        updatedAt: Date.now()
+    }
+    ];
 
-    try {
-      setLoading(true)
-      setMessages(prev => [
-        ...prev,
-        {
-          role: "User",
-          text: query
-        }
-      ]);
-      
+});
 
-      const response = await api.post(
-        "/generate",
-        {
-          query
-        }
-      );
+const [chatId, setActiveChatId] = useState(() => {
 
-      const data = response.data;
+    const savedChatId = localStorage.getItem(
+        "content-blitz-active-chat"
+    );
 
-      setMessages(prev => [
-        ...prev,
-        {
+    return savedChatId ? Number(savedChatId) : 1;
+
+});
+
+const currentConversation =
+  conversations.find(chat => chat.id === chatId) ??
+  conversations[0];
+
+const messages = currentConversation?.messages ?? [];
+
+  useEffect(() => {
+
+    localStorage.setItem(
+        "content-blitz-chats",
+        JSON.stringify(conversations)
+    );
+
+}, [conversations]);
+
+useEffect(() => {
+
+    localStorage.setItem(
+        "content-blitz-active-chat",
+        chatId.toString()
+    );
+
+}, [chatId]);
+
+const [prompt, setPrompt] = useState("");
+const handleSend = async (query: string) => {
+const currentChatId = chatId;
+
+
+  try {
+
+    setLoading(true);
+
+    // Add user message + thinking placeholder
+    setConversations(prev =>
+      prev.map(chat =>
+        chat.id === currentChatId
+          ? {
+              ...chat,
+              updatedAt: Date.now(),
+              title:
+                chat.messages.length === 0
+                  ? query.trim().slice(0, 30)
+                  : chat.title,
+
+              messages: [
+                ...chat.messages,
+
+                {
+                  role: "User",
+                  text: query
+                },
+
+                {
+                  role: "Assistant",
+                  text: "Thinking..."
+                }
+              ]
+            }
+          : chat
+      )
+    );
+
+    const response = await api.post("/generate", {
+      query
+    });
+
+    const data = response.data;
+
+    // Replace the Thinking... message
+    setConversations(prev =>
+      prev.map(chat => {
+
+        if (chat.id !== currentChatId) return chat;
+
+        const updatedMessages = [...chat.messages];
+
+        updatedMessages[updatedMessages.length - 1] = {
           role: "Assistant",
           text:
             data.response ??
             data.answer ??
             "Response received."
-        }
-      ]);
-    }
+        };
 
-    catch (error) {
-      console.error(error);
+        return {
+          ...chat,
+          updatedAt: Date.now(),
 
-    }
-  
-  finally{
-    setLoading(false)
+          title:
+          chat.messages.length === 0
+          ? query.trim().slice(0,30)
+          : chat.title,
+          messages: updatedMessages
+        };
+
+      })
+    );
 
   }
 
-  };
+  catch (error) {
+
+    console.error(error);
+
+  }
+
+  finally {
+
+    setLoading(false);
+
+  }
+
+};
+  const handleNewChat = () => {
+    
+
+    const newChat = {
+
+        id: Date.now(),
+
+        title: `New Chat ${conversations.length + 1}`,
+
+        messages: [],
+
+        updatedAt: Date.now()
+    };
+
+
+    setConversations(prev => [
+
+        ...prev,
+        
+        newChat
+
+    ]);
+
+    setActiveChatId(newChat.id);
+
+};
+
+
+const handleDeleteChat = (id: number) => {
+
+    if (conversations.length === 1) {
+
+        alert("You must keep at least one chat.");
+
+        return;
+
+    }
+
+    const confirmed = window.confirm(
+        "Are you sure you want to delete this chat?"
+    );
+
+    if (!confirmed) return;
+
+    setConversations(prev => {
+
+        const updated = prev.filter(chat => chat.id !== id);
+
+        if (chatId === id) {
+            setActiveChatId(updated[0].id);
+        }
+
+        return updated;
+
+    });
+
+};
 
   return (
 
@@ -86,8 +240,14 @@ overflow:"hidden"
 }}
 
 >
-
-<Sidebar/>
+  
+<Sidebar
+    chats={conversations}
+    chatId={chatId}
+    onSelect={setActiveChatId}
+    onNewChat={handleNewChat}
+    onDeleteChat={handleDeleteChat}
+/>
 
 <div
 
@@ -107,34 +267,36 @@ overflow:"hidden"
 
 >
 
-<h1
+{messages.length > 0 && (
+    <h1
+        style={{
+            textAlign: "center",
+            margin: "20px 0"
+        }}
+    >
+        Content Blitz AI
+    </h1>
+)}
 
-style={{
-
-textAlign:"center",
-
-margin:"20px 0"
-
-}}
-
->
-
-Content Blitz AI
-
-</h1>
-
-<ChatWindow
-
-messages={messages}
-
-/>
+{
+  messages.length === 0
+  ? (
+      <WelcomeScreen
+        onSuggestionClick={setPrompt}
+      />
+    )
+  : (
+      <ChatWindow
+        messages={messages}
+      />
+    )
+}
 
 <PromptBox
-
-onSend={handleSend}
-
-loading={loading}
-
+    query={prompt}
+    setQuery={setPrompt}
+    onSend={handleSend}
+    loading={loading}
 />
 
 </div>

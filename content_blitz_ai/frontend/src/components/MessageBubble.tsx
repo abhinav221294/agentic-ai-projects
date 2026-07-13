@@ -1,4 +1,5 @@
-import ReactMarkdown from "react-markdown"
+import ReactMarkdown from "react-markdown";
+import TypingIndicator from "./TypingIndicator";
 
 type Props = {
 
@@ -100,12 +101,11 @@ boxShadow:
 
 >
 
-<ReactMarkdown>
-
-{text}
-
-</ReactMarkdown>
-
+{
+    role === "Assistant" && text === "Thinking..."
+        ? <TypingIndicator />
+        : <ReactMarkdown>{text}</ReactMarkdown>
+}
 </div>
 
 </div>

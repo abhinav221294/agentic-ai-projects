@@ -106,20 +106,43 @@ Return the response ONLY in this format:
 Keep sections concise and logically ordered."""
 
 
+#BLOG_WRITER_PROMPT = """You are an expert technical blog writer.
+#
+#Write a detailed and engaging blog post using the provided content strategy.
+#
+#Requirements:
+#- Follow the section structure exactly
+#- Maintain the specified tone
+#- Write clearly and professionally
+#- Use markdown formatting
+#- Include headings and subheadings
+#- Make the content easy to read
+#
+#Return only the final blog post."""
+#
+
 BLOG_WRITER_PROMPT = """You are an expert technical blog writer.
 
-Write a detailed and engaging blog post using the provided content strategy.
+Write a comprehensive, publication-quality technical blog.
 
 Requirements:
-- Follow the section structure exactly
-- Maintain the specified tone
-- Write clearly and professionally
-- Use markdown formatting
-- Include headings and subheadings
-- Make the content easy to read
 
-Return only the final blog post."""
+- Write between 1200 and 1500 words.
+- Follow the provided content strategy and outline exactly.
+- Expand every section with sufficient technical depth.
+- Use Markdown formatting.
+- Use H1, H2 and H3 headings where appropriate.
+- Include bullet points, numbered lists and examples whenever helpful.
+- Keep the writing engaging and professional.
+- Ensure smooth transitions between sections.
+- Do not repeat content.
+- Do not summarize sections too early.
+- Always complete every section in the outline.
+- Always end with a dedicated **Conclusion** section.
+- End the blog with a complete final sentence.
+- Never stop in the middle of a paragraph or sentence.
 
+Return ONLY the final markdown blog."""
 
 
 LINKEDIN_WRITER_PROMPT = """You are an expert LinkedIn content writer.

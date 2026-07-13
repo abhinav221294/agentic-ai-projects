@@ -96,13 +96,21 @@ Research Context:
 Content Strategy:
 {content_plan}"""
         
-        llm = claude_client_llm(temperature=0.5,max_tokens=2000)
+        llm = claude_client_llm(temperature=0.5,max_tokens=3000)
         results = llm.invoke(prompt)
+
+        print(results.response_metadata)
+
         blog_content = str(results.content).strip()
         
         word_count = word_count_tool.invoke(
         {"text": blog_content}
         )
+
+        if word_count < 1000:
+            raise ValueError(
+            f"Blog too short ({word_count} words). Regenerate."
+            )
 
         add_trace(
         state,

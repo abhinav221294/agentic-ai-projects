@@ -98,14 +98,15 @@ IMAGE_COMPLETED = "image_completed"
 IMAGE_FAILED = "image_failed"
 IMAGE_VALIDATION_FAILED = "image_validation_failed"
 IMAGE_STARTED = "image_started"
-FALLBACK_RESPONSE = """Sorry, I could not understand the request properly.
+FALLBACK_RESPONSE = """Sorry, I couldn't understand your request.
 
-Please try asking for:
-- blog generation
-- linkedin post
-- research
-- image generation
-- strategy"""
+Try asking me to:
+
+- 📝 Write a blog
+- 💼 Create a LinkedIn post
+- 🎨 Generate an image
+
+Or simply describe what you'd like to create."""
 
 # ======================
 # VALID CATEGORIES

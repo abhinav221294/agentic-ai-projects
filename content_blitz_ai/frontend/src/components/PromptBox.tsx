@@ -2,136 +2,126 @@ import { useState } from "react"
 
 type Props = {
 
-  onSend:(query:string)=>void
+  query: string;
 
-  loading:boolean
+  setQuery: React.Dispatch<React.SetStateAction<string>>;
+
+  onSend: (query: string) => void;
+
+  loading: boolean;
 
 }
 
 function PromptBox({
 
+  query,
+
+  setQuery,
+
   onSend,
 
   loading
 
-}:Props){
+}: Props) {
 
-const [
+  const handleClick = () => {
 
-query,
+    if (!query.trim()) return;
 
-setQuery
+    onSend(query);
 
-]
+    setQuery("");
 
-=
+  };
 
-useState("")
+  return (
 
-const handleClick = ()=>{
+    <div
 
-if(!query.trim())
+      style={{
 
-return
+        display: "flex",
 
-onSend(query)
+        gap: "12px",
 
-setQuery("")
+        paddingBottom: "20px"
 
-}
+      }}
 
-return(
+    >
 
-<div
+      <input
 
-style={{
+        style={{
 
-display:"flex",
+          flex: 1,
 
-gap:"12px",
+          padding: "14px",
 
-paddingBottom:"20px"
+          borderRadius: "10px",
 
-}}
+          border: "1px solid #333",
 
->
+          background: "white",
 
-<input
+          color: "black",
 
-style={{
+          fontSize: "16px"
 
-flex:1,
+        }}
 
-padding:"14px",
+        value={query}
 
-borderRadius:"10px",
+        disabled={loading}
 
-border:"1px solid #333",
+        onChange={(e) => setQuery(e.target.value)}
 
-background:"#1E293B",
+        onKeyDown={(e) => {
 
-color:"white",
+          if (e.key === "Enter") {
 
-fontSize:"16px"
+            handleClick();
 
-}}
+          }
 
-value={query}
+        }}
 
-disabled={loading}
+        placeholder="Ask Content Blitz"
 
-onChange={(e)=>
+      />
 
-setQuery(
+      <button
 
-e.target.value
+        disabled={loading}
 
-)
+        onClick={handleClick}
 
-}
+        style={{
 
-placeholder="Ask Content Blitz"
+          padding: "14px 20px",
 
-/>
+          borderRadius: "10px",
 
-<button
+          color: "white",
 
-style={{
+          background: loading ? "#4B5563" : "#2563EB",
 
-padding:"14px 20px",
+          border: "none",
 
-borderRadius:"10px",
+          cursor: loading ? "not-allowed" : "pointer"
 
-cursor:"pointer"
+        }}
 
-}}
+      >
 
-disabled={loading}
+        Send
 
-onClick={handleClick}
+      </button>
 
->
+    </div>
 
-{
-
-loading
-
-?
-
-"Thinking..."
-
-:
-
-"Send"
+  );
 
 }
 
-</button>
-
-</div>
-
-)
-
-}
-
-export default PromptBox
+export default PromptBox;

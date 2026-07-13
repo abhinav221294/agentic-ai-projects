@@ -1,10 +1,10 @@
+import { useEffect, useRef } from "react"
 import MessageBubble from "./MessageBubble"
 
 type Message={
 
-role:string
-
-text:string
+role:string;
+text:string;
 
 }
 
@@ -19,6 +19,15 @@ function ChatWindow({
 messages
 
 }:Props){
+const bottomRef = useRef<HTMLDivElement>(null);
+
+useEffect(() => {
+
+    bottomRef.current?.scrollIntoView({
+        behavior: "smooth"
+    });
+
+}, [messages]);
 
 return(
 
@@ -60,8 +69,9 @@ text={msg.text}
 )
 
 )
-
 }
+
+<div ref={bottomRef}></div>
 
 </div>
 
