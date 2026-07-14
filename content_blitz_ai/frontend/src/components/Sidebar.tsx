@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 type Conversation = {
   id: number;
   title: string;
@@ -9,18 +11,25 @@ type Props = {
   chatId: number;
   onSelect: (id: number) => void;
   onNewChat: () => void;
-  onDeleteChat: (id: number) => void;   // NEW
+  onDeleteChat: (id: number) => void;
+  onRenameChat: (id: number, title: string) => void;
 };
 
 
 
 function Sidebar({
-  chats,
-  chatId,
-  onSelect,
-  onNewChat,
-  onDeleteChat
+    chats,
+    chatId,
+    onSelect,
+    onNewChat,
+    onDeleteChat,
+    onRenameChat
 }: Props) {
+
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+
+  const [search, setSearch] = useState("");
 
   const formatTime = (timestamp: number) => {
 
@@ -33,9 +42,15 @@ function Sidebar({
 
 };
 
-  const sortedChats = [...chats].sort(
+const filteredChats = chats.filter(chat =>
+  chat.title
+    .toLowerCase()
+    .includes(search.toLowerCase())
+);
+
+const sortedChats = [...filteredChats].sort(
   (a, b) => b.updatedAt - a.updatedAt
-  );
+);
 
   return (
 
@@ -66,7 +81,22 @@ function Sidebar({
     >
     + New Chat
   </button>
-      
+  
+  <input
+  type="text"
+  placeholder="🔍 Search chats..."
+  value={search}
+  onChange={(e) => setSearch(e.target.value)}
+  style={{
+    padding: "10px",
+    borderRadius: "8px",
+    border: "1px solid #374151",
+    background: "#1F2937",
+    color: "white",
+    outline: "none",
+    fontSize: "14px"
+    }}
+    />    
 
      {sortedChats.map(chat => (
 
@@ -93,53 +123,104 @@ function Sidebar({
     }}
     >
 
-    <div
-      style={{
-        flex: 1,
-        cursor: "pointer"
-      }}
-      onClick={() => onSelect(chat.id)}
-    >
-    <div>
-    {formatTime(chat.updatedAt)}
-    </div>
-      <div>
-        {chat.title}
-      </div>
+  <div
+  style={{
+    flex: 1,
+    cursor: "pointer"
+  }}
+  onClick={() => onSelect(chat.id)}
+>
 
-      <div
-        style={{
-          fontSize: "12px",
-          color: "#94A3B8",
-          marginTop: "6px"
+  {
+    editingId === chat.id
+      ? (
+        <input
+        value={editingTitle}
+        autoFocus
+        onChange={(e) => setEditingTitle(e.target.value)}
+        onKeyDown={(e) => {
+        if (e.key === "Enter") {
+            onRenameChat(chat.id, editingTitle.trim());
+            setEditingId(null);
+        }
         }}
-      >
-        {formatTime(chat.updatedAt)}
-      </div>
+        onBlur={() => {
+        onRenameChat(chat.id, editingTitle.trim());
+        setEditingId(null);
+        }}
+        style={{
+        width: "100%",
+        maxWidth: "160px",
+        padding: "4px 6px",
+        borderRadius: "6px",
+        border: "1px solid #3B82F6",
+        background: "#111827",
+        color: "white",
+        fontSize: "14px",
+        boxSizing: "border-box"
+        }}
+        />
+      )
+      : (
+        <div
+          onDoubleClick={() => {
+            setEditingId(chat.id);
+            setEditingTitle(chat.title);
+          }}
+        >
+          {chat.title}
+        </div>
+      )
+  }
 
-    </div>
+  <div
+    style={{
+      fontSize: "12px",
+      color: "#94A3B8",
+      marginTop: "6px"
+    }}
+  >
+    {formatTime(chat.updatedAt)}
+  </div>
+
+</div>
+
+    {
+    editingId !== chat.id && (
 
     <button
     onClick={() => onDeleteChat(chat.id)}
     style={{
-    background: "transparent",
-    border: "none",
-    cursor: "pointer",
-    fontSize: "14px",
-    color: "#CBD5E1"
-    }}
-    >
-    🗑️
-  </button>
+        background: "transparent",
+        border: "none",
+        cursor: "pointer",
+        color: "#CBD5E1"
+      }}
+>
+      🗑️
+    </button>
+
+    )
+    } 
 
   </div>
 
   ))}
-
+    {sortedChats.length === 0 && (
+    <div
+    style={{
+      color: "#94A3B8",
+      textAlign: "center",
+      marginTop: "20px"
+      }}
+    >
+    No chats found.
+  </div>
+  )}
     </div>
 
   );
-
 }
+
 
 export default Sidebar;

@@ -54,8 +54,7 @@ const [chatId, setActiveChatId] = useState(() => {
 });
 
 const currentConversation =
-  conversations.find(chat => chat.id === chatId) ??
-  conversations[0];
+    conversations.find(chat => chat.id === chatId);
 
 const messages = currentConversation?.messages ?? [];
 
@@ -79,42 +78,67 @@ useEffect(() => {
 
 const [prompt, setPrompt] = useState("");
 const handleSend = async (query: string) => {
-const currentChatId = chatId;
 
+  let currentChatId = chatId;
+
+  // If there is no active chat, create one automatically
+ if (!currentConversation) {
+
+    const newChat = {
+        id: Date.now(),
+        title: query.trim().slice(0, 30),
+        updatedAt: Date.now(),
+        messages: [
+            {
+                role: "User",
+                text: query
+            },
+            {
+                role: "Assistant",
+                text: "Thinking..."
+            }
+        ]
+    };
+
+    setConversations(prev => [...prev, newChat]);
+
+    setActiveChatId(newChat.id);
+
+    currentChatId = newChat.id;
+  }
 
   try {
 
     setLoading(true);
 
     // Add user message + thinking placeholder
+    if (currentConversation) {
     setConversations(prev =>
-      prev.map(chat =>
-        chat.id === currentChatId
-          ? {
-              ...chat,
-              updatedAt: Date.now(),
-              title:
-                chat.messages.length === 0
-                  ? query.trim().slice(0, 30)
-                  : chat.title,
-
-              messages: [
-                ...chat.messages,
-
-                {
-                  role: "User",
-                  text: query
-                },
-
-                {
-                  role: "Assistant",
-                  text: "Thinking..."
+        prev.map(chat =>
+            chat.id === currentChatId
+                ? {
+                    ...chat,
+                    updatedAt: Date.now(),
+                    title:
+                        chat.messages.length === 0
+                            ? query.trim().slice(0, 30)
+                            : chat.title,
+                    messages: [
+                        ...chat.messages,
+                        {
+                            role: "User",
+                            text: query
+                        },
+                        {
+                            role: "Assistant",
+                            text: "Thinking..."
+                        }
+                    ]
                 }
-              ]
-            }
-          : chat
-      )
+                : chat
+        )
     );
+    }
 
     const response = await api.post("/generate", {
       query
@@ -174,7 +198,7 @@ const currentChatId = chatId;
 
         id: Date.now(),
 
-        title: `New Chat ${conversations.length + 1}`,
+        title: "New Chat",
 
         messages: [],
 
@@ -197,13 +221,6 @@ const currentChatId = chatId;
 
 const handleDeleteChat = (id: number) => {
 
-    if (conversations.length === 1) {
-
-        alert("You must keep at least one chat.");
-
-        return;
-
-    }
 
     const confirmed = window.confirm(
         "Are you sure you want to delete this chat?"
@@ -215,13 +232,30 @@ const handleDeleteChat = (id: number) => {
 
         const updated = prev.filter(chat => chat.id !== id);
 
-        if (chatId === id) {
-            setActiveChatId(updated[0].id);
+        if (updated.length === 0) {
+          setActiveChatId(0);
+        } else if (chatId === id) {
+          setActiveChatId(updated[0].id);
         }
 
         return updated;
 
     });
+
+};
+
+  const handleRenameChat = (id: number, title: string) => {
+
+    setConversations(prev =>
+        prev.map(chat =>
+            chat.id === id
+                ? {
+                    ...chat,
+                    title: title.trim() || chat.title
+                }
+                : chat
+        )
+    );
 
 };
 
@@ -247,6 +281,7 @@ overflow:"hidden"
     onSelect={setActiveChatId}
     onNewChat={handleNewChat}
     onDeleteChat={handleDeleteChat}
+    onRenameChat={handleRenameChat}
 />
 
 <div
