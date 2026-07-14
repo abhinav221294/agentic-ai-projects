@@ -1,6 +1,6 @@
 import time
 from src.workflows.state_management import AgentState,set_state
-from src.prompts.prompt import BLOG_WRITER_PROMPT
+from src.prompts.prompt import BLOG_WRITER_PROMPT,GLOBAL_GUARDRAILS
 from src.core.config import (BLOG_GENERATED ,BLOG_COMPLETED, 
 BLOG_VALIDATION_FAILED,BLOG_GENERATION_FAILED,LOW_CONFIDENCE,HIGH_CONFIDENCE,
 BLOG_STARTED,BLOG_STRUCTURE_GENERATED)
@@ -16,12 +16,15 @@ from src.tools.content_tools import (
     blog_outline_tool
 )
 
+from src.core.prompt_builder import build_prompt_context
+
 def blog_writer_agent(state: AgentState) -> AgentState:
     start = time.time()
     query = state.get("user_query")
     content_plan = state.get("content_plan")
     research_content = state.get("research_content","")
     active_agent = "blog_writer_agent"
+    context = build_prompt_context(state)
     if not validate_query(query):
 
         add_error(state, "Missing blog query")
@@ -79,9 +82,12 @@ def blog_writer_agent(state: AgentState) -> AgentState:
         agent=active_agent,
         action=BLOG_STRUCTURE_GENERATED
         )
-        prompt = f"""{BLOG_WRITER_PROMPT}
+        prompt = f"""{GLOBAL_GUARDRAILS}
+{BLOG_WRITER_PROMPT}
 
-User Query:
+{context}
+        
+Current User Query:
 {query}
 
 Suggested Title:
@@ -106,11 +112,6 @@ Content Strategy:
         word_count = word_count_tool.invoke(
         {"text": blog_content}
         )
-
-        if word_count < 1000:
-            raise ValueError(
-            f"Blog too short ({word_count} words). Regenerate."
-            )
 
         add_trace(
         state,

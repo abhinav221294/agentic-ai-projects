@@ -1,5 +1,5 @@
 from src.workflows.state_management import AgentState,set_state
-from src.prompts.prompt import IMAGE_PROMPT
+from src.prompts.prompt import IMAGE_PROMPT,GLOBAL_GUARDRAILS
 from src.core.workflow_utils import (
     add_trace,
     add_error,
@@ -53,7 +53,9 @@ def image_agent(state: AgentState) -> AgentState:
             action=IMAGE_STARTED
          )
         
-        prompt = f"""{IMAGE_PROMPT}
+        prompt = f"""{GLOBAL_GUARDRAILS}
+
+{IMAGE_PROMPT}
 
 User Query:
 {query}""".strip()

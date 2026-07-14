@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from src.workflows.content_workflow import run_workflow
 from src.core.state_initializer import create_initial_state
 from fastapi.middleware.cors import CORSMiddleware
+from src.memory.redis_memory import append_message, get_messages
 
 # =========================
 # REQUEST MODEL
@@ -12,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 class ContentRequest(BaseModel):
     query: str
+    session_id: str
 
 
 # =========================
@@ -65,11 +67,29 @@ def generate_content(request: ContentRequest):
     Generate blog, LinkedIn content, research, or images
     using the Content Blitz AI workflow.
     """
-    state = create_initial_state(request.query)
+    state = create_initial_state(
+    query=request.query,
+    session_id=request.session_id
+    )
+
+    append_message(
+    session_id=request.session_id,
+    role="user",
+    content=request.query
+    )
+
+    history = get_messages(request.session_id)
+
+    state["conversation_history"] = history 
 
     #result = run_workflow(state)
     try:
         result = run_workflow(state)
+        append_message(
+        session_id=request.session_id,
+        role="assistant",
+        content=result["answer"]
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

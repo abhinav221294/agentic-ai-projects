@@ -1,5 +1,5 @@
 from src.workflows.state_management import AgentState, set_state
-from src.prompts.prompt import CONTENT_STRATEGIST_PROMPT
+from src.prompts.prompt import CONTENT_STRATEGIST_PROMPT,GLOBAL_GUARDRAILS
 from src.core.config import (STRATEGY_COMPLETED ,STRATEGY_FAILED, STRATEGY_VALIDATION_FAILED, BLOG_VALIDATION_FAILED,
 STRATEGY_GENERATED,STRATEGY_STARTED,HIGH_CONFIDENCE,LOW_CONFIDENCE)
 from src.integrations.gemini_client import gemini_llm_client
@@ -36,7 +36,8 @@ def strategist_agent(state: AgentState) -> AgentState:
     else "No external research was performed. Create the strategy using your own knowledge."
     )
 
-    prompt = f"""{CONTENT_STRATEGIST_PROMPT}
+    prompt = f"""{GLOBAL_GUARDRAILS}
+{CONTENT_STRATEGIST_PROMPT}
 
 User Query:
 {query}

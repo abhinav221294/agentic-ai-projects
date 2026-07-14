@@ -29,7 +29,20 @@ function App() {
     );
 
     if (savedChats) {
-        return JSON.parse(savedChats);
+
+    const chats: Conversation[] = JSON.parse(savedChats);
+
+    return chats.map(chat => ({
+        ...chat,
+        messages: chat.messages.filter(
+            message =>
+                !(
+                    message.role === "Assistant" &&
+                    message.text === "Thinking..."
+                )
+        )
+    }));
+
     }
 
     return [
@@ -67,14 +80,7 @@ const messages = currentConversation?.messages ?? [];
 
 }, [conversations]);
 
-useEffect(() => {
-
-    localStorage.setItem(
-        "content-blitz-active-chat",
-        chatId.toString()
-    );
-
-}, [chatId]);
+conversations
 
 const [prompt, setPrompt] = useState("");
 const handleSend = async (query: string) => {
@@ -141,7 +147,8 @@ const handleSend = async (query: string) => {
     }
 
     const response = await api.post("/generate", {
-      query
+    query,
+    session_id: currentChatId.toString()
     });
 
     const data = response.data;
@@ -182,7 +189,27 @@ const handleSend = async (query: string) => {
 
     console.error(error);
 
-  }
+    setConversations(prev =>
+        prev.map(chat => {
+
+            if (chat.id !== currentChatId) return chat;
+
+            const updatedMessages = [...chat.messages];
+
+            updatedMessages[updatedMessages.length - 1] = {
+                role: "Assistant",
+                text: "❌ Failed to generate response."
+            };
+
+            return {
+                ...chat,
+                messages: updatedMessages
+            };
+
+        })
+    );
+
+}
 
   finally {
 

@@ -1,6 +1,6 @@
 from src.integrations.gemini_client import gemini_llm_client
 from src.workflows.state_management import AgentState
-from src.prompts.prompt import RESEARCH_DECISION_PROMPT
+from src.prompts.prompt import RESEARCH_DECISION_PROMPT,GLOBAL_GUARDRAILS
 
 
 def research_decision_agent(state: AgentState):
@@ -8,7 +8,8 @@ def research_decision_agent(state: AgentState):
     try:
         query = state.get("user_query")
 
-        prompt = f"""
+        prompt = f"""{GLOBAL_GUARDRAILS}
+
 {RESEARCH_DECISION_PROMPT}
 
 User Query:

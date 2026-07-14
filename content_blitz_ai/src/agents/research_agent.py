@@ -1,5 +1,5 @@
 from src.workflows.state_management import AgentState,set_state
-from src.prompts.prompt import RESEARCH_PROMPT, RESEARCH_SYNTHESIS_PROMPT
+from src.prompts.prompt import RESEARCH_PROMPT, RESEARCH_SYNTHESIS_PROMPT, GLOBAL_GUARDRAILS
 #from src.integrations.perplexity_client import perplexity_search
 #from src.integrations.tavily_client import tavily_search
 from src.integrations.gemini_client import gemini_llm_client
@@ -58,7 +58,9 @@ Source:
 
 
 def synthesize_research(user_query, formatted_results, llm):
-    prompt = f"""{RESEARCH_SYNTHESIS_PROMPT}
+    prompt = f"""{GLOBAL_GUARDRAILS}
+
+{RESEARCH_SYNTHESIS_PROMPT}
 
 User Query:
 {user_query}

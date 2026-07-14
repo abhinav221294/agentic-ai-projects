@@ -22,8 +22,17 @@ def query_handler(state: AgentState) -> AgentState:
     query = state.get("user_query")
 
     # Reserved for future conversational memory support
-    conversation_history = state.get("conversation_history")
-    memory = state.get("memory")
+    #conversation_history = state.get("conversation_history")
+    #memory = state.get("memory")
+    conversation_history = state.get(
+    "conversation_history",
+    []
+     )
+
+    retrieved_memories = state.get(
+    "retrieved_memories",
+    []
+    )
     
     
     active_agent = "query_handler"

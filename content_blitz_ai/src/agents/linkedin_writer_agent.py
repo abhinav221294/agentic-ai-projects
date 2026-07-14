@@ -1,6 +1,6 @@
 import time
 from src.workflows.state_management import AgentState,set_state
-from src.prompts.prompt import LINKEDIN_WRITER_PROMPT
+from src.prompts.prompt import LINKEDIN_WRITER_PROMPT,GLOBAL_GUARDRAILS
 from src.integrations.claude_client import claude_client_llm
 from src.tools.content_tools import (
     linkedin_hook_tool,
@@ -21,6 +21,8 @@ from src.core.config import (LINKEDIN_GENERATED,LINKEDIN_COMPLETED,
  LINKEDIN_VALIDATION_FAILED,LINKEDIN_FAILED,LOW_CONFIDENCE,HIGH_CONFIDENCE,
  LINKEDIN_STARTED,LINKEDIN_STRUCTURE_GENERATED)
 
+from src.core.prompt_builder import build_prompt_context
+
 def linkedin_writer_agent(state: AgentState) -> AgentState:
     start = time.time()
     query = state.get('user_query')
@@ -30,6 +32,8 @@ def linkedin_writer_agent(state: AgentState) -> AgentState:
     "research_content",
     ""
     )
+
+    context = build_prompt_context(state)
 
     research_section = (
     research_content
@@ -89,9 +93,12 @@ def linkedin_writer_agent(state: AgentState) -> AgentState:
             action=LINKEDIN_STRUCTURE_GENERATED
         )
 
-        prompt = f"""{LINKEDIN_WRITER_PROMPT}
+        prompt = f"""{GLOBAL_GUARDRAILS}
+{LINKEDIN_WRITER_PROMPT}
 
-User Query:
+{context}
+
+Current User Query:
 {query}
 
 Suggested Hook:
