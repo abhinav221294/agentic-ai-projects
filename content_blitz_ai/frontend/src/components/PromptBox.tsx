@@ -23,6 +23,8 @@ function PromptBox({
 }: Props) {
 
   const handleClick = () => {
+    console.log("PromptBox handleClick");
+    console.log("Query:", query);
 
     if (!query.trim()) return;
 

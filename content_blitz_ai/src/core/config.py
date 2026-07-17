@@ -119,3 +119,6 @@ VALID_CATEGORIES = {
     "research",
     "none"
 }
+
+MIN_IMPORTANCE = 0
+MAX_IMPORTANCE = 10

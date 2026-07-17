@@ -5,7 +5,9 @@ from fastapi import HTTPException
 from src.workflows.content_workflow import run_workflow
 from src.core.state_initializer import create_initial_state
 from fastapi.middleware.cors import CORSMiddleware
-from src.memory.redis_memory import append_message, get_messages
+from src.memory.memory_manager import memory_manager
+from src.core.lifespan import lifespan
+from fastapi import FastAPI
 
 # =========================
 # REQUEST MODEL
@@ -13,8 +15,14 @@ from src.memory.redis_memory import append_message, get_messages
 
 class ContentRequest(BaseModel):
     query: str
-    session_id: str
+    conversation_id: int
 
+#class ConversationRequest(BaseModel):
+#    user_id: str
+
+
+#class ConversationResponse(BaseModel):
+#    conversation_id: int
 
 # =========================
 # RESPONSE MODEL
@@ -35,8 +43,9 @@ class ContentResponse(BaseModel):
 
 app = FastAPI(
     title="Content Blitz AI",
-    description="Multi-Agent Content Generation Platform built using LangGraph",
-    version="1.0.0"
+    description="Multi-Agent Content Generation Platform",
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 app.add_middleware(
@@ -50,6 +59,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/")
 def health_check():
     return {
@@ -58,6 +68,36 @@ def health_check():
         "version": "1.0.0"
     }
 
+@app.post("/conversation")
+def create_conversation():
+
+    user = memory_manager.postgres.get_or_create_user("demo_user")
+
+    conversation = memory_manager.postgres.create_conversation(user.id,
+                                                                title="New Chat")
+
+    return {
+        "conversation_id": conversation.id
+    }
+
+#@app.post(
+#    "/conversation",
+#    response_model=ConversationResponse
+#)
+#def create_conversation(request: ConversationRequest):
+#
+#    user = memory_manager.postgres.get_or_create_user(
+#        request.user_id
+#    )
+#
+#    conversation = memory_manager.postgres.create_conversation(
+#        user.id
+#    )
+#
+#    return {
+#        "conversation_id": conversation.id
+#    }
+#
 @app.post(
     "/generate",
     response_model=ContentResponse
@@ -67,34 +107,39 @@ def generate_content(request: ContentRequest):
     Generate blog, LinkedIn content, research, or images
     using the Content Blitz AI workflow.
     """
-    state = create_initial_state(
-    query=request.query,
-    session_id=request.session_id
-    )
-
-    append_message(
-    session_id=request.session_id,
-    role="user",
-    content=request.query
-    )
-
-    history = get_messages(request.session_id)
-
-    state["conversation_history"] = history 
+   
 
     #result = run_workflow(state)
     try:
+        state = create_initial_state(
+        query=request.query,
+        conversation_id=request.conversation_id
+        )
+
+        memory_manager.save_message(
+        conversation_id=request.conversation_id,
+        role="user",
+        content=request.query
+        )
+
+        history = memory_manager.get_short_term(
+        request.conversation_id
+        )
+
+        state["conversation_history"] = history 
         result = run_workflow(state)
-        append_message(
-        session_id=request.session_id,
+        memory_manager.save_message(
+        conversation_id=request.conversation_id,
         role="assistant",
         content=result["answer"]
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    except Exception:
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
     return {
         "intent": result.get("current_intent"),

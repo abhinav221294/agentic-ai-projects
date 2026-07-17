@@ -7,12 +7,12 @@ redis_client = redis.Redis(
     decode_responses=True)
 
 def append_message(
-        session_id : str,
+        conversation_id : str,
         role: str,
         content: str
     ):
     
-    key = f"session:{session_id}"
+    key = f"session:{conversation_id}"
 
     message = {
         "role":role,
@@ -27,9 +27,9 @@ def append_message(
         60*60*24
     )
     
-def get_messages(session_id: str):
+def get_messages(conversation_id: str):
 
-    key = f"session:{session_id}"
+    key = f"session:{conversation_id}"
     messages = redis_client.lrange(
         key,
         0,
@@ -41,6 +41,6 @@ def get_messages(session_id: str):
         for message in messages
     ]
 
-def clear_session(session_id: str):
-    key = f"session:{session_id}"
+def clear_session(conversation_id: str):
+    key = f"session:{conversation_id}"
     redis_client.delete(key)

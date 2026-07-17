@@ -10,7 +10,7 @@ class AgentState(TypedDict):
     # USER INPUT
     # =========================
     user_id: str
-    session_id: str
+    conversation_id: str
     user_query: str
 
     # =========================

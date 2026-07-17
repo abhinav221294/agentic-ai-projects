@@ -7,6 +7,9 @@ import WelcomeScreen from "./components/WelcomeScreen";
 
 import api from "./services/api";
 
+const THINKING_MESSAGE = "Thinking...";
+const ERROR_MESSAGE = "❌ Failed to generate response.";
+
 type Message = {
   role: string;
   text: string;
@@ -18,6 +21,8 @@ type Conversation = {
   messages: Message[];
   updatedAt: number
 };
+
+
 
 function App() {
   const [loading,setLoading] = useState(false)
@@ -38,33 +43,71 @@ function App() {
             message =>
                 !(
                     message.role === "Assistant" &&
-                    message.text === "Thinking..."
+                    message.text === THINKING_MESSAGE
                 )
         )
     }));
 
     }
 
-    return [
-    {
-        id: 1,
-        title: "New Chat 1",
-        messages: [],
-        updatedAt: Date.now()
-    }
-    ];
+    return [];
 
 });
 
-const [chatId, setActiveChatId] = useState(() => {
+const updateConversation = (
+    id: number,
+    updater: (chat: Conversation) => Conversation
+) => {
+    setConversations(prev =>
+        prev.map(chat =>
+            chat.id === id ? updater(chat) : chat
+        )
+    );
+};
 
+const createConversationWithMessage = async (firstMessage?: string) => {
+    const response = await api.post("/conversation");
+
+    const newChat : Conversation  = {
+        id: response.data.conversation_id,
+        title: firstMessage
+            ? firstMessage.slice(0, 30)
+            : "New Chat",
+        messages: firstMessage
+            ? [
+                {
+                    role: "User",
+                    text: firstMessage
+                },
+                {
+                    role: "Assistant",
+                    text: THINKING_MESSAGE
+                }
+            ]
+            : [],
+        updatedAt: Date.now()
+    };
+
+    setConversations(prev => [...prev, newChat]);
+    setActiveChatId(newChat.id);
+
+    return newChat;
+};
+
+const [chatId, setActiveChatId] = useState(() => {
     const savedChatId = localStorage.getItem(
         "content-blitz-active-chat"
     );
 
-    return savedChatId ? Number(savedChatId) : 1;
-
+    return savedChatId ? Number(savedChatId) : 0;
 });
+
+useEffect(() => {
+    localStorage.setItem(
+        "content-blitz-active-chat",
+        chatId.toString()
+    );
+}, [chatId]);
 
 const currentConversation =
     conversations.find(chat => chat.id === chatId);
@@ -80,108 +123,71 @@ const messages = currentConversation?.messages ?? [];
 
 }, [conversations]);
 
-conversations
 
 const [prompt, setPrompt] = useState("");
 const handleSend = async (query: string) => {
+    const trimmedQuery = query.trim();
 
-  let currentChatId = chatId;
+    if (!trimmedQuery) return;
 
-  // If there is no active chat, create one automatically
- if (!currentConversation) {
+    setPrompt("");
 
-    const newChat = {
-        id: Date.now(),
-        title: query.trim().slice(0, 30),
-        updatedAt: Date.now(),
-        messages: [
-            {
-                role: "User",
-                text: query
-            },
-            {
-                role: "Assistant",
-                text: "Thinking..."
-            }
-        ]
-    };
+    let currentChatId = chatId;
 
-    setConversations(prev => [...prev, newChat]);
-
-    setActiveChatId(newChat.id);
-
+    if (!currentConversation) {
+    const newChat = await createConversationWithMessage(trimmedQuery);
     currentChatId = newChat.id;
-  }
+    }
+    else {
 
+ updateConversation(currentChatId, chat => ({
+    ...chat,
+    updatedAt: Date.now(),
+    messages: [
+        ...chat.messages,
+        {
+            role: "User",
+            text: trimmedQuery
+        },
+        {
+            role: "Assistant",
+            text: THINKING_MESSAGE
+        }
+    ]
+}));
+
+}
   try {
 
     setLoading(true);
 
-    // Add user message + thinking placeholder
-    if (currentConversation) {
-    setConversations(prev =>
-        prev.map(chat =>
-            chat.id === currentChatId
-                ? {
-                    ...chat,
-                    updatedAt: Date.now(),
-                    title:
-                        chat.messages.length === 0
-                            ? query.trim().slice(0, 30)
-                            : chat.title,
-                    messages: [
-                        ...chat.messages,
-                        {
-                            role: "User",
-                            text: query
-                        },
-                        {
-                            role: "Assistant",
-                            text: "Thinking..."
-                        }
-                    ]
-                }
-                : chat
-        )
-    );
-    }
-
     const response = await api.post("/generate", {
-    query,
-    session_id: currentChatId.toString()
+    query: trimmedQuery,
+    conversation_id: currentChatId
     });
 
     const data = response.data;
+    console.log("Response:", data);
 
     // Replace the Thinking... message
-    setConversations(prev =>
-      prev.map(chat => {
+    updateConversation(currentChatId, chat => {
 
-        if (chat.id !== currentChatId) return chat;
+    const updatedMessages = [...chat.messages];
 
-        const updatedMessages = [...chat.messages];
-
-        updatedMessages[updatedMessages.length - 1] = {
-          role: "Assistant",
-          text:
+    updatedMessages[updatedMessages.length - 1] = {
+        role: "Assistant",
+        text:
             data.response ??
             data.answer ??
             "Response received."
         };
 
         return {
-          ...chat,
-          updatedAt: Date.now(),
-
-          title:
-          chat.messages.length === 0
-          ? query.trim().slice(0,30)
-          : chat.title,
-          messages: updatedMessages
+        ...chat,
+        updatedAt: Date.now(),
+        messages: updatedMessages
         };
-
-      })
-    );
+    });
 
   }
 
@@ -189,25 +195,20 @@ const handleSend = async (query: string) => {
 
     console.error(error);
 
-    setConversations(prev =>
-        prev.map(chat => {
+   updateConversation(currentChatId, chat => {
 
-            if (chat.id !== currentChatId) return chat;
+    const updatedMessages = [...chat.messages];
 
-            const updatedMessages = [...chat.messages];
+    updatedMessages[updatedMessages.length - 1] = {
+        role: "Assistant",
+        text: ERROR_MESSAGE
+    };
 
-            updatedMessages[updatedMessages.length - 1] = {
-                role: "Assistant",
-                text: "❌ Failed to generate response."
-            };
-
-            return {
-                ...chat,
-                messages: updatedMessages
-            };
-
-        })
-    );
+    return {
+        ...chat,
+        messages: updatedMessages
+    };
+});
 
 }
 
@@ -218,31 +219,14 @@ const handleSend = async (query: string) => {
   }
 
 };
-  const handleNewChat = () => {
-    
-
-    const newChat = {
-
-        id: Date.now(),
-
-        title: "New Chat",
-
-        messages: [],
-
-        updatedAt: Date.now()
-    };
 
 
-    setConversations(prev => [
-
-        ...prev,
-        
-        newChat
-
-    ]);
-
-    setActiveChatId(newChat.id);
-
+  const handleNewChat = async () => {
+    try {
+        await createConversationWithMessage();
+    } catch (error) {
+        console.error(error);
+    }
 };
 
 
