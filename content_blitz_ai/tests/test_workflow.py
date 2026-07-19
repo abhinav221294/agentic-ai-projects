@@ -1,6 +1,6 @@
 from unittest.mock import patch
 import pytest
-from src.workflows.content_workflow import run_workflow
+from backend.src.workflows.content_workflow import run_workflow
 
 @patch("src.workflows.content_workflow.blog_writer_agent")
 @patch("src.workflows.content_workflow.strategist_agent")

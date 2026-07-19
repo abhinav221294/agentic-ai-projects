@@ -1,9 +1,10 @@
 import redis
 import json
+from src.core.config import REDIS_HOST,REDIS_PORT
 
 redis_client = redis.Redis(
-    host="localhost",
-    port=6379,
+    host=REDIS_HOST,
+    port=REDIS_PORT,
     decode_responses=True)
 
 def append_message(

@@ -1,4 +1,4 @@
-from src.workflows.content_workflow import run_workflow
+from backend.src.workflows.content_workflow import run_workflow
 
 
 def test_research_workflow():

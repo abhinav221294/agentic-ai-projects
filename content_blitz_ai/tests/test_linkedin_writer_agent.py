@@ -1,8 +1,8 @@
 from unittest.mock import patch
 
-from src.agents.linkedin_writer_agent import linkedin_writer_agent
+from backend.src.agents.linkedin_writer_agent import linkedin_writer_agent
 
-from src.core.config import (
+from backend.src.core.config import (
     LINKEDIN_COMPLETED,
     LINKEDIN_FAILED,
     LINKEDIN_VALIDATION_FAILED

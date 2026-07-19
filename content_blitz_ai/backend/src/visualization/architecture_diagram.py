@@ -1,4 +1,4 @@
-from src.workflows.content_workflow import __build_workflow
+from content_blitz_ai.backend.src.workflows.content_workflow import __build_workflow
 
 app = __build_workflow()
 

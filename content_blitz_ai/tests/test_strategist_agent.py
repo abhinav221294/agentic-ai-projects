@@ -1,6 +1,6 @@
 from unittest.mock import patch, MagicMock
 
-from src.agents.strategist_agent import strategist_agent
+from backend.src.agents.strategist_agent import strategist_agent
 
 
 def create_mock_state():

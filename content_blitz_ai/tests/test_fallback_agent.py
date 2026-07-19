@@ -1,4 +1,4 @@
-from src.agents.fallback_agent import fallback_agent
+from backend.src.agents.fallback_agent import fallback_agent
 
 
 def create_mock_state():

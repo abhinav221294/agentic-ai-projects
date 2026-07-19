@@ -1,42 +1,45 @@
-from src.memory.postgres_memory import PostgresMemory
+from backend.src.memory.postgres_memory import PostgresMemory
 
-memory = PostgresMemory()
 
-user = memory.get_or_create_user("demo_user")
-print("User:", user)
-print("User ID:", user.id)
+def test_postgres_memory():
+    memory = PostgresMemory()
 
-conversation = memory.create_conversation(
-    user.id,
-    "Redis Blog"
-)
+    user = memory.get_or_create_user(
+        username="demo_user",
+        email="demo_user@example.com",
+        password="test_password",
+    )
 
-print("Conversation:", conversation)
+    assert user.id is not None
 
-if conversation is None:
-    raise Exception("Conversation is None!")
+    conversation = memory.create_conversation(
+        user.id,
+        "Redis Blog"
+    )
 
-print("Conversation ID:", conversation.id)
+    assert conversation.id is not None
 
-message = memory.save_message(
-    conversation.id,
-    "user",
-    "Write a Redis blog"
-)
+    message = memory.save_message(
+        conversation.id,
+        "user",
+        "Write a Redis blog"
+    )
 
-print("Message:", message.id)
+    assert message.id is not None
 
-history = memory.get_messages(conversation.id)
+    saved_memory = memory.save_memory(
+        user_id=user.id,
+        conversation_id=conversation.id,
+        content="The user wants to write a Redis blog.",
+        memory_type="preference",
+    )
 
-for msg in history:
-    print(f"{msg.role}: {msg.content}")
+    assert saved_memory.id is not None
 
-history = memory.get_messages(conversation.id)
+    results = memory.semantic_search(
+        user_id=user.id,
+        query="What does the user want to write?",
+    )
 
-print("\nConversation History")
-print("---------------------")
-
-for msg in history:
-    print(f"{msg.role}: {msg.content}")
-
-memory.close()
+    assert len(results) > 0
+    assert "Redis" in results[0].content

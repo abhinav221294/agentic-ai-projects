@@ -3,7 +3,7 @@
 # =========================
 
 # pytest is the testing framework used to run test cases
-import pytest
+#import pytest
 
 # MagicMock helps create fake/mock objects
 # patch temporarily replaces real objects/functions during testing
@@ -18,7 +18,7 @@ from sklearn.metrics import confusion_matrix
 
 
 # importing the actual routing function to test
-from src.agents.query_handler import query_handler
+from backend.src.agents.query_handler import query_handler
 
 
 # =========================

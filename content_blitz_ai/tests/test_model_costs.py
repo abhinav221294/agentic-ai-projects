@@ -1,10 +1,10 @@
-from src.utils.token_cost_estimator import (
+from backend.src.utils.token_cost_estimator import (
     TokenUsage,
     ModelPricing,
     calculate_token_cost
 )
 
-from src.config.model_pricing import MODEL_PRICING
+from backend.src.config.model_pricing import MODEL_PRICING
 
 
 def test_model_cost_comparison():

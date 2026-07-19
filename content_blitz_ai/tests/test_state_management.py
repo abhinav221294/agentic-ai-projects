@@ -1,4 +1,4 @@
-from src.workflows.state_management import set_state
+from backend.src.workflows.state_management import set_state
 
 
 def build_state():

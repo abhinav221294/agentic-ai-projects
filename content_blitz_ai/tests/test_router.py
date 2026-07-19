@@ -1,4 +1,4 @@
-from src.core.router import route_workflow
+from backend.src.core.router import route_workflow
 from unittest.mock import patch
 
 def test_route_to_blog():

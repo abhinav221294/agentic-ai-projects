@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from src.agents.query_handler import query_handler
+from backend.src.agents.query_handler import query_handler
 
 
 # =========================

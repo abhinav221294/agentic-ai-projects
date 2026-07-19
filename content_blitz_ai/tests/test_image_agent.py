@@ -1,9 +1,9 @@
 import pytest
 from unittest.mock import patch
 
-from src.agents.image_agent import image_agent
+from backend.src.agents.image_agent import image_agent
 
-from src.core.config import (
+from backend.src.core.config import (
     IMAGE_COMPLETED,
     IMAGE_FAILED,
     IMAGE_VALIDATION_FAILED

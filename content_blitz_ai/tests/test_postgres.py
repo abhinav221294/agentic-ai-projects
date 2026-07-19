@@ -1,6 +1,6 @@
 from sqlalchemy import text
 
-from src.memory.database import engine
+from backend.src.memory.database import engine
 
 with engine.connect() as conn:
 

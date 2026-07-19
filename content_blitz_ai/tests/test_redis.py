@@ -1,4 +1,4 @@
-from src.memory.redis_memory import *
+from backend.src.memory.redis_memory import *
 
 append_message(
     "test",

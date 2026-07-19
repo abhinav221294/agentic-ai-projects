@@ -13,10 +13,17 @@ from sqlalchemy.orm import Session
 
 from src.core.config import MIN_IMPORTANCE, MAX_IMPORTANCE
 
+#from pgvector.sqlalchemy import cosine_distance
+
+from src.embeddings.embedding_service import EmbeddingService
+
 T = TypeVar("T")
 logger = logging.getLogger(__name__)
 
 class PostgresMemory:
+
+    def __init__(self):
+        self.embedding_service = EmbeddingService()
 
     @staticmethod
     def _commit(db) -> None:
@@ -50,8 +57,10 @@ class PostgresMemory:
         return obj
 
     def get_or_create_user(
-        self,
-        username: str,
+    self,
+    username: str,
+    email: str,
+    password: str,
     ) -> User:
 
         user = self.get_user(username)
@@ -61,7 +70,11 @@ class PostgresMemory:
 
         with SessionLocal() as db:
 
-            user = User(username=username)
+            user = User(
+            username=username,
+            email=email,
+            password=password,
+            )
 
             return self._persist(db, user)
 
@@ -188,30 +201,6 @@ class PostgresMemory:
 
             return True
         
-
-    def save_memory(
-    self,
-    user_id: int,
-    content: str,
-    memory_type: str,
-    importance: int = 1,
-    embedding: str | None = None,
-    ) -> Memory:
-
-        with SessionLocal() as db:
-
-            memory = Memory(
-            user_id=user_id,
-            content=content,
-            memory_type=memory_type,
-            importance=importance,
-            embedding=embedding,
-            )
-
-            return self._persist(
-            db,
-            memory
-            )
         
     def get_memories(
     self,
@@ -312,3 +301,112 @@ class PostgresMemory:
             db.refresh(memory)
 
             return memory
+        
+
+    def save_memory(
+    self,
+    user_id: int,
+    conversation_id: int,
+    content: str,
+    memory_type: str,
+    importance: int = 1,
+    ) -> Memory:
+
+        embedding = self.embedding_service.embed(content)
+
+        with SessionLocal() as db:
+
+            memory = Memory(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            content=content,
+            memory_type=memory_type,
+            importance=importance,
+            embedding=embedding,
+            )
+
+            return self._persist(db, memory)
+
+
+    def search_memories(
+    self,
+    user_id: int,
+    query_embedding: list[float],
+    top_k: int = 5,
+    memory_type: str | None = None,
+    ) -> list[Memory]:
+
+        with SessionLocal() as db:
+
+            query = (
+            db.query(Memory)
+            .filter(Memory.user_id == user_id)
+            )
+
+            if memory_type:
+                query = query.filter(
+                Memory.memory_type == memory_type
+                )
+
+            return (
+            query.order_by(
+                Memory.embedding.cosine_distance(query_embedding)
+                )
+                .limit(top_k)
+                .all()
+                )   
+    
+
+    def semantic_search(
+    self,
+    user_id: int,
+    query: str,
+    top_k: int = 5,
+    memory_type: str | None = None,
+    ):
+
+        embedding = self.embedding_service.embed(query)
+
+        return self.search_memories(
+        user_id=user_id,
+        query_embedding=embedding,
+        top_k=top_k,
+        memory_type=memory_type,
+        )
+
+    def delete_memory(
+    self,
+    memory_id: int,
+    ) -> bool:
+
+        with SessionLocal() as db:
+
+            memory = db.get(Memory, memory_id)
+
+            if memory is None:
+                return False
+
+            db.delete(memory)
+
+            self._commit(db)
+
+            return True
+    
+    def delete_memories_by_conversation(
+    self,
+    conversation_id: int,
+    ) -> int:
+
+        with SessionLocal() as db:
+
+            deleted = (
+            db.query(Memory)
+            .filter(
+                Memory.conversation_id == conversation_id
+                )
+                .delete()
+            )
+
+            self._commit(db)
+
+            return deleted

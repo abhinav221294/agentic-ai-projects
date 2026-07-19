@@ -1,15 +1,10 @@
-import os
-
-from dotenv import load_dotenv
+from src.core.config import PERPLEXITY_API_KEY
 from openai import OpenAI
-
-load_dotenv()
-
 
 def __perplexity_client_llm():
 
     client = OpenAI(
-        api_key=os.getenv("PERPLEXITY_API_KEY"),
+        api_key=PERPLEXITY_API_KEY,
         base_url="https://api.perplexity.ai"
     )
 

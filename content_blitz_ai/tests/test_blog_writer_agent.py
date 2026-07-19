@@ -1,10 +1,10 @@
 from unittest.mock import patch
 
-from src.agents.blog_writer_agent import blog_writer_agent
+from backend.src.agents.blog_writer_agent import blog_writer_agent
 
-from src.core.config import (
+from backend.src.core.config import (
     BLOG_COMPLETED,
-    BLOG_FAILED,
+    BLOG_GENERATION_FAILED,
     BLOG_VALIDATION_FAILED
 )
 
@@ -77,7 +77,7 @@ def test_blog_writer_exception(mock_llm):
     result = blog_writer_agent(state)
 
     assert result["status"] == "failed"
-    assert result["workflow_step"] == BLOG_FAILED
+    assert result["workflow_step"] == BLOG_GENERATION_FAILED
 
 
 @patch("src.agents.blog_writer_agent.word_count_tool")

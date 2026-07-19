@@ -33,7 +33,6 @@ INTENT_CLASSIFICATION_FAILED = "intent_classification_failed"
 
 FALLBACK_STARTED = "fallback_started"
 FALLBACK_COMPLETED = "fallback_completed"
-FALLBACK_RESPONSE = "fallback_response"
 
 
 WORKFLOW_COMPLETED = "workflow_completed"
@@ -77,7 +76,7 @@ BLOG_COMPLETED = "blog_completed"
 BLOG_VALIDATION_FAILED = "blog_validation_failed"
 BLOG_GENERATION_FAILED = "blog_generation_failed"
 BLOG_STARTED="blog_started"
-BLOG_STRUCTURE_GENERATED="blog_generated"
+BLOG_STRUCTURE_GENERATED="blog_structure_generated"
 
 # ======================
 # LINKEDIN
@@ -122,3 +121,60 @@ VALID_CATEGORIES = {
 
 MIN_IMPORTANCE = 0
 MAX_IMPORTANCE = 10
+
+
+
+# ==========================================
+# API Keys
+# ==========================================
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
+
+# ==========================================
+# Models
+# ==========================================
+
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL")
+EMBEDDING_MODEL = os.getenv(
+    "EMBEDDING_MODEL",
+    "gemini-embedding-001"
+)
+
+# ==========================================
+# Redis
+# ==========================================
+
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+
+# ==========================================
+# PostgreSQL
+# ==========================================
+
+POSTGRES_USER = os.getenv("POSTGRES_USER")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+POSTGRES_DB = os.getenv("POSTGRES_DB")
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", 5432))
+
+# ==========================================
+# Authentication
+# ==========================================
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(
+    os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30)
+)
+
+# ==========================================
+# Admin
+# ==========================================
+
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")

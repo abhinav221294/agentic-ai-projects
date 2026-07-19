@@ -3,7 +3,6 @@ from fastapi import FastAPI
 
 from src.memory.init_db import init_database
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 

@@ -1,6 +1,6 @@
 from unittest.mock import patch, MagicMock
 
-from src.agents.research_agent import (
+from backend.src.agents.research_agent import (
     optimize_search_query,
     format_search_results,
     synthesize_research,

@@ -10,7 +10,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:17
+    image: pgvector/pgvector:pg17
     container_name: content_blitz_postgres
 
     environment:
