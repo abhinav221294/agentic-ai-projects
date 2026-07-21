@@ -4,11 +4,13 @@ from typing import Any
 
 from src.auth.dependencies import get_current_user
 from src.memory.models import User
-from src.workflows.content_workflow import run_workflow
+from src.workflows.content_workflow import run_workflow,run_workflow_stream
 from src.core.state_initializer import create_initial_state
 from src.memory.memory_manager import memory_manager
+from fastapi.responses import StreamingResponse
 
 router = APIRouter()
+
 
 
 class ContentRequest(BaseModel):
@@ -104,6 +106,24 @@ def generate_content(
 
         result = run_workflow(state)
 
+        if result.get("status") == "failed":
+            raise HTTPException(
+            status_code=500,
+            detail="\n".join(result.get("errors", []))
+            )
+
+        assistant_response = result.get("answer")
+
+        if assistant_response is None:
+            raise HTTPException(
+            status_code=500,
+            detail=f"Workflow completed without an answer. Keys: {list(result.keys())}"
+            )
+
+        print("=" * 80)
+        print(result)
+        print("=" * 80)
+
         memory_manager.save_message(
             conversation_id=request.conversation_id,
             role="assistant",
@@ -143,3 +163,83 @@ def generate_content(
         "confidence": result.get("confidence"),
         "active_agent": result.get("active_agent"),
     }
+
+
+@router.post("/generate/stream")
+def generate_content_stream(
+    request: ContentRequest,
+    current_user: User = Depends(get_current_user),
+):
+    try:
+
+        state = create_initial_state(
+            query=request.query,
+            conversation_id=request.conversation_id,
+        )
+
+        memory_manager.save_message(
+            conversation_id=request.conversation_id,
+            role="user",
+            content=request.query,
+        )
+
+        memory_manager.save_persistent_message(
+        conversation_id=request.conversation_id,
+        role="user",
+        content=request.query,
+        )
+
+        memory_manager.save_memory(
+        user_id=current_user.id,
+        conversation_id=request.conversation_id,
+        content=request.query,
+        memory_type="conversation",
+        )
+
+        history = memory_manager.get_short_term(
+            request.conversation_id
+        )
+
+        memories = memory_manager.semantic_search(
+        user_id=current_user.id,
+        query=request.query,
+        )
+
+        state["retrieved_memories"] = memories
+
+        state["conversation_history"] = history
+
+        stream = run_workflow_stream(state)
+
+        def stream_response():
+            full_response = ""
+
+            for chunk in run_workflow_stream(state):
+                full_response += chunk
+                yield chunk
+
+            memory_manager.save_message(
+            conversation_id=request.conversation_id,
+            role="assistant",
+            content=full_response,
+            )
+
+            memory_manager.save_persistent_message(
+            conversation_id=request.conversation_id,
+            role="assistant",
+            content=full_response,
+            )
+
+        return StreamingResponse(
+        stream_response(),
+        media_type="text/event-stream",
+        )
+    except Exception as e:
+            import traceback
+
+            traceback.print_exc()
+
+            raise HTTPException(
+        status_code=500,
+        detail=str(e),
+        )

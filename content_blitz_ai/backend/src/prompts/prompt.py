@@ -187,11 +187,17 @@ Length Rules
 Writing Requirements
 
 - Follow the provided content strategy and outline.
-- Use Markdown formatting.
+- Use valid GitHub Flavored Markdown.
 - Use H1, H2, and H3 headings where appropriate.
+- Leave exactly one blank line after every heading.
+- Leave exactly one blank line before every list.
+- Leave exactly one blank line after the final item of every list.
+- Never continue a paragraph immediately after a list.
+- Use bullet points only when they improve readability.
+- Use numbered lists only for sequential steps.
+- Use tables only when they improve readability.
 - Include examples.
 - Include code snippets only when they add value.
-- Use bullet points and tables when they improve readability.
 - Finish every section completely.
 - End with a dedicated Conclusion.
 - End with a complete final sentence.
@@ -202,6 +208,36 @@ Accuracy Rules
 - Never invent facts, statistics, companies, research, or citations.
 - If external research is provided, use it appropriately.
 - If no research is available, rely only on established knowledge.
+
+Markdown Formatting Rules
+
+Always generate clean GitHub Flavored Markdown.
+
+Correct example:
+
+## Components
+
+The system consists of:
+
+- Component A
+- Component B
+- Component C
+
+This paragraph starts after a blank line.
+
+Correct numbered list:
+
+1. Step One
+2. Step Two
+3. Step Three
+
+This paragraph also starts after a blank line.
+
+Never produce:
+
+- Item A
+- Item B
+This paragraph immediately follows the list.
 
 Output Rules
 

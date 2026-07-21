@@ -1,9 +1,9 @@
 from langgraph.graph import StateGraph, END
 from src.workflows.state_management import AgentState,set_state
 from src.agents.query_handler import query_handler
-from src.agents.blog_writer_agent import blog_writer_agent
+from src.agents.blog_writer_agent import blog_writer_agent,blog_writer_agent_stream
 from src.agents.image_agent import image_agent
-from src.agents.linkedin_writer_agent import linkedin_writer_agent
+from src.agents.linkedin_writer_agent import linkedin_writer_agent, linkedin_writer_agent_stream
 from src.agents.research_agent import research_agent
 from src.agents.strategist_agent import strategist_agent
 from src.agents.fallback_agent import fallback_agent
@@ -150,8 +150,44 @@ def run_workflow(state: dict):
         return state
 
     
+def run_workflow_stream(state: AgentState):
 
+    state["status"] = "running"
+    state["workflow_step"] = WORKFLOW_STARTED
 
+    try:
+
+        state = query_handler(state)
+
+        intent = state.get("current_intent")
+
+        if intent == "image":
+            raise ValueError("Image streaming not supported")
+
+        if intent not in ("blog", "linkedin"):
+            raise ValueError(
+                "Streaming only supported for content generation"
+            )
+
+        state = research_decision_agent(state)
+
+        if route_research(state) == "research":
+            state = research_agent(state)
+
+        state = strategist_agent(state)
+
+        route = route_content(state)
+
+        if route == "blog_writer":
+            yield from blog_writer_agent_stream(state)
+
+        elif route == "linkedin_writer":
+            yield from linkedin_writer_agent_stream(state)
+
+    except Exception:
+        state["status"] = "failed"
+        state["workflow_step"] = WORKFLOW_FAILED
+        raise
 
 
 

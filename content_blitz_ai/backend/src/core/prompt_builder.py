@@ -20,13 +20,15 @@ def build_prompt_context(state: AgentState) -> str:
     retrieved_memories = state.get(
         "retrieved_memories",
         []
-    )
+        )
 
     if retrieved_memories:
-        memory = "\n".join(retrieved_memories)
+        memory = "\n".join(
+            m.content for m in retrieved_memories
+        )
 
         sections.append(
-            f"Relevant User Memories:\n{memory}"
+        f"Relevant User Memories:\n{memory}"
         )
 
     return "\n\n".join(sections)

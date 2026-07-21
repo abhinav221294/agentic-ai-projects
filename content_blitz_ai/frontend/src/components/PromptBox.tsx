@@ -37,18 +37,13 @@ function PromptBox({
   return (
 
     <div
-
-      style={{
-
-        display: "flex",
-
-        gap: "12px",
-
-        paddingBottom: "20px"
-
-      }}
-
-    >
+    style={{
+    display: "flex",
+    gap: "12px",
+    paddingBottom: "20px",
+    width: "100%",   // Adjust this value
+  }}
+  >
 
       <input
 
