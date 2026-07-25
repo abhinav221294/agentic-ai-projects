@@ -293,3 +293,20 @@ body {
 .react-markdown tr:nth-child(even) {
     background: rgba(255,255,255,.03);
 }
+
+
+.markdown-content {
+    width: 100%;
+}
+
+.react-markdown {
+    width: 100%;
+}
+
+.react-markdown > :first-child {
+    margin-top: 0;
+}
+
+.react-markdown > :last-child {
+    margin-bottom: 0;
+}

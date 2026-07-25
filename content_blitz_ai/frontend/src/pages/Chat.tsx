@@ -26,7 +26,12 @@ type Conversation = {
   updatedAt: number
 };
 
-
+const processingSteps =  [
+    "🧠 Understanding your request...",
+    "🔍 Researching...",
+    "📋 Planning content...",
+    "✍️ Writing response..."
+];
 
 function App() {
   const [loading,setLoading] = useState(false)
@@ -43,13 +48,14 @@ function App() {
 
     return chats.map(chat => ({
         ...chat,
-        messages: chat.messages.filter(
-            message =>
-                !(
-                    message.role === "Assistant" &&
-                    message.text === THINKING_MESSAGE
-                )
-        )
+        messages: chat.messages.filter(message => {
+        if (message.role !== "Assistant") return true;
+
+        return ![
+        THINKING_MESSAGE,
+        ...processingSteps,
+        ].includes(message.text);
+        })
     }));
 
     }
@@ -130,8 +136,8 @@ const messages = currentConversation?.messages ?? [];
 
 const [prompt, setPrompt] = useState("");
 const handleSend = async (query: string) => {
+    let interval: ReturnType<typeof setInterval> | undefined;
     const trimmedQuery = query.trim();
-
     if (!trimmedQuery) return;
 
     setPrompt("");
@@ -165,11 +171,52 @@ const handleSend = async (query: string) => {
 }));
 
 }
+
   try {
 
     setLoading(true);
 
+    // Show the first processing step immediately
+    updateConversation(currentChatId, chat => {
+    const updated = [...chat.messages];
+
+    updated[updated.length - 1] = {
+        role: "Assistant",
+        text: processingSteps[0],
+    };
+
+    return {
+        ...chat,
+        messages: updated,
+    };
+    });
+
+    let step = 1;
+
+    // Rotate through the remaining processing steps
+    interval = setInterval(() => {
+
+    updateConversation(currentChatId, chat => {
+
+        const updated = [...chat.messages];
+
+        updated[updated.length - 1] = {
+            role: "Assistant",
+            text: processingSteps[step],
+        };
+
+        return {
+            ...chat,
+            messages: updated,
+        };
+    });
+
+    step = (step + 1) % processingSteps.length;
+
+    }, 2000);
+
     let assistantText = "";
+    let firstChunk = true;
 
     await generateContentStream(
     {
@@ -177,6 +224,11 @@ const handleSend = async (query: string) => {
         conversation_id: currentChatId,
     },
     (chunk) => {
+         if (firstChunk) {
+        clearInterval(interval);
+        firstChunk = false;
+        }
+
         assistantText += chunk;
 
         updateConversation(currentChatId, chat => {
@@ -220,6 +272,10 @@ const handleSend = async (query: string) => {
 }
 
   finally {
+
+    if (interval) {
+        clearInterval(interval);
+    }
 
     setLoading(false);
 

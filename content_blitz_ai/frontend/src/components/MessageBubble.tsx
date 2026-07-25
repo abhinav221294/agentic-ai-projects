@@ -45,15 +45,17 @@ function MessageBubble({ role, text }: Props) {
         </div>
 
         {role === "Assistant" && text === "Thinking..." ? (
-          <TypingIndicator />
-        ) : (
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
-          >
-            {text}
-          </ReactMarkdown>
-        )}
+  <TypingIndicator />
+) : (
+  <div className="react-markdown markdown-content">
+      <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeHighlight]}
+    >
+      {text}
+    </ReactMarkdown>
+    </div>
+    )}  
       </div>
     </div>
   );
