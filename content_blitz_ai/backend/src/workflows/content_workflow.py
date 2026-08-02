@@ -156,9 +156,6 @@ def run_workflow_stream(state: AgentState):
     state["workflow_step"] = WORKFLOW_STARTED
 
     try:
-
-        state = query_handler(state)
-
         intent = state.get("current_intent")
 
         if intent == "image":

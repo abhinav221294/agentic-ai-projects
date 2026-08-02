@@ -31,7 +31,7 @@ export async function generateContentStream(
   onChunk: (chunk: string) => void
 ): Promise<void> {
   const token = localStorage.getItem("token");
-
+  
   const response = await fetch(`${API_URL}/generate/stream`, {
     method: "POST",
     headers: {
@@ -41,11 +41,31 @@ export async function generateContentStream(
     body: JSON.stringify(request),
   });
 
-  if (!response.ok) {
-    throw new Error(
-      `Streaming failed (${response.status})`
-    );
-  }
+const contentType = response.headers.get("content-type");
+
+if (!response.ok) {
+    if (contentType?.includes("application/json")) {
+        const error = await response.json();
+        throw new Error(error.detail ?? "Request failed");
+    }
+
+    throw new Error(`Streaming failed (${response.status})`);
+}
+
+if (contentType?.includes("application/json")) {
+    const result = await response.json();
+
+    if (result.intent === "image") {
+        onChunk(
+            `${result.response ?? ""}\n\n![Generated Image](${result.image_url})`
+        );
+    } else {
+        onChunk(result.response ?? "");
+    }
+
+    return;
+}
+
 
   if (!response.body) {
     throw new Error("ReadableStream not supported.");

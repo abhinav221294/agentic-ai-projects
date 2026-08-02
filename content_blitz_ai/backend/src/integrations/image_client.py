@@ -1,17 +1,30 @@
+from pathlib import Path
+import base64
+import uuid
 from openai import OpenAI
+from src.core.config import APP_BASE_URL
+client = OpenAI()
 
-def generate_image(
-    prompt: str,
-    model: str = "gpt-image-1",
-    size: str = "1024x1024"
-):
+BASE_DIR = Path(__file__).resolve().parents[2]   # backend
+IMAGE_DIR = BASE_DIR / "static" / "images"
 
-    client = OpenAI()
+IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def generate_image(prompt: str):
 
     response = client.images.generate(
-        model=model,
+        model="gpt-image-1",
         prompt=prompt,
-        size=size
+        size="1024x1024",
     )
 
-    return response.data[0].url
+    image_bytes = base64.b64decode(response.data[0].b64_json)
+
+    filename = f"{uuid.uuid4()}.png"
+    filepath = IMAGE_DIR / filename
+
+    with open(filepath, "wb") as f:
+        f.write(image_bytes)
+
+    return f"{APP_BASE_URL}/static/images/{filename}"

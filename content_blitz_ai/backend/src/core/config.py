@@ -178,3 +178,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(
 
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+
+APP_BASE_URL = os.getenv(
+    "APP_BASE_URL",
+    "http://127.0.0.1:8000",
+)
