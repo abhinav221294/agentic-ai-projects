@@ -114,3 +114,5 @@ test_outputs/
 secrets/
 credentials/
 service_account.json
+
+Issue & fixes/
