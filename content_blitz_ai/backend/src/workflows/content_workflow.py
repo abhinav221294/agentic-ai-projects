@@ -9,7 +9,7 @@ from src.agents.strategist_agent import strategist_agent
 from src.agents.fallback_agent import fallback_agent
 from src.agents.research_decision_agent import research_decision_agent
 from src.core.config import WORKFLOW_STARTED,WORKFLOW_COMPLETED,WORKFLOW_FAILED
-
+from src.core.workflow_utils import add_request_cost
 import time
 
 
@@ -52,6 +52,8 @@ def __build_workflow():
 
 
     workflow = StateGraph(AgentState)
+
+    
 
     workflow.add_node("query_handler", query_handler)
     workflow.add_node("blog_writer", blog_writer_agent)
@@ -116,7 +118,7 @@ workflow_app = __build_workflow()
 def run_workflow(state: dict):
 
     start = time.time()
-
+    
     try:
         # =========================
         # INITIAL STATE
@@ -129,9 +131,19 @@ def run_workflow(state: dict):
         #print("WORKFLOW_RESULT:", result)
 
         if result.get("status") == "failed":
+            add_request_cost(result)
             return result
         
         status="success"
+        add_request_cost(result)
+        print("\n========== REQUEST COST ==========")
+        print(state.get("metadata", {}).get("llm_usage"))
+        print("==================================")
+
+        print("\n========== REQUEST TRACE ==========")
+        for trace in state.get("trace", []):
+            print(trace)
+        print("===================================")
 
         results =  set_state(
             state = result,
@@ -139,7 +151,7 @@ def run_workflow(state: dict):
             answer=result.get("answer"),
             status=status,
             trace_action=WORKFLOW_COMPLETED
-            )
+            )   
         return results
     
     except Exception as e:
@@ -174,16 +186,21 @@ def run_workflow_stream(state: AgentState):
         state = strategist_agent(state)
 
         route = route_content(state)
-
+       
         if route == "blog_writer":
             yield from blog_writer_agent_stream(state)
 
         elif route == "linkedin_writer":
             yield from linkedin_writer_agent_stream(state)
-
+        add_request_cost(state)
+        print("\n========== REQUEST TRACE ==========")
+        for trace in state.get("trace", []):
+            print(trace)
+        print("===================================")        
     except Exception:
         state["status"] = "failed"
         state["workflow_step"] = WORKFLOW_FAILED
+        add_request_cost(state)
         raise
 
 

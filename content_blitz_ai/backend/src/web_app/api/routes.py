@@ -12,7 +12,6 @@ from src.core.state_initializer import create_initial_state
 from src.memory.memory_manager import memory_manager
 from fastapi.responses import StreamingResponse, JSONResponse
 
-
 router = APIRouter()
 
 class ContentRequest(BaseModel):
@@ -79,9 +78,8 @@ def generate_content(
     request: ContentRequest,
     current_user: User = Depends(get_current_user),
 ):
-
     try:
-
+        
         state = create_initial_state(
             query=request.query,
             conversation_id=request.conversation_id,
@@ -176,14 +174,13 @@ def generate_content_stream(
     current_user: User = Depends(get_current_user),
 ):
     try:
-
         state = create_initial_state(
             query=request.query,
             conversation_id=request.conversation_id,
         )
 
         state = query_handler(state)
-
+       
         intent = state.get("current_intent")
 
         memory_manager.save_message(
@@ -217,7 +214,7 @@ def generate_content_stream(
         state["retrieved_memories"] = memories
         
         state["conversation_history"] = history
-
+        
         if intent == "image":
             result = run_workflow(state)
 
@@ -288,7 +285,6 @@ def generate_content_stream(
             content=full_response,
             memory_type="conversation",
             )
-
         return StreamingResponse(
         stream_response(),
         media_type="text/event-stream",

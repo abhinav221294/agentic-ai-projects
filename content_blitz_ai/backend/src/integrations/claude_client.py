@@ -21,5 +21,6 @@ def claude_client_llm(
         max_tokens=max_tokens,
         streaming=streaming,
         timeout=timeout,
-        max_retries=max_retries
+        max_retries=max_retries,
+        stream_usage=True
     )

@@ -7,6 +7,8 @@ from src.core.workflow_utils import (
     add_trace,
     add_error
 )
+
+from src.core.llm_service import LLMService
 import time
 
 def strategist_agent(state: AgentState) -> AgentState:
@@ -53,7 +55,13 @@ Research Context:
         )
 
         llm = gemini_llm_client(temperature=0.2)
-        response = llm.invoke(prompt)
+        response = LLMService.invoke(
+            llm=llm,
+            prompt=prompt,
+            state=state,
+            agent=active_agent,
+            operation="strategy_generation"
+        )
         strategy = str(response.content).strip()
         status = "success"
         execution_time = round(time.time() - start, 2)

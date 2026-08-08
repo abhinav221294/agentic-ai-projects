@@ -1,16 +1,18 @@
 import time
 from src.workflows.state_management import AgentState,set_state
 from src.prompts.prompt import BLOG_WRITER_PROMPT,GLOBAL_GUARDRAILS
-from src.core.config import (BLOG_GENERATED ,BLOG_COMPLETED, 
-BLOG_VALIDATION_FAILED,BLOG_GENERATION_FAILED,LOW_CONFIDENCE,HIGH_CONFIDENCE,
+from src.core.config import (BLOG_GENERATED ,BLOG_COMPLETED
+,BLOG_GENERATION_FAILED,LOW_CONFIDENCE,HIGH_CONFIDENCE,
 BLOG_STARTED,BLOG_STRUCTURE_GENERATED)
 from src.integrations.claude_client import claude_client_llm
 from src.tools.utility_tools import word_count_tool
 from src.core.workflow_utils import (
     add_trace,
     add_error,
-    validate_query
+    validate_query,
+    invoke_tool_with_trace
 )
+
 from src.tools.content_tools import (
     generate_title_tool,
     blog_outline_tool
@@ -53,9 +55,21 @@ def prepare_blog_generation(state: AgentState) -> BlogGenerationContext:
         action=BLOG_STARTED,
     )
 
-    title = generate_title_tool.invoke({"topic": query})
+    title = invoke_tool_with_trace(
+        state=state,
+        tool=generate_title_tool,
+        tool_input={"topic": query},
+        agent=active_agent,
+        operation="generate_title"
+    )
 
-    outline = blog_outline_tool.invoke({"topic": query})
+    outline = invoke_tool_with_trace(
+        state=state,
+        tool=blog_outline_tool,
+        tool_input={"topic": query},
+        agent=active_agent,
+        operation="generate_outline"
+    )
 
     research_section = (
         research_content
@@ -92,7 +106,7 @@ Content Strategy:
 
     llm = claude_client_llm(
         temperature=0.5,
-        max_tokens=3000,
+        max_tokens=3500,
     )
 
     return BlogGenerationContext(
@@ -146,8 +160,23 @@ def blog_writer_agent(state: AgentState) -> AgentState:
     try:
 
         ctx = prepare_blog_generation(state)
+        
+        result = LLMService.invoke(
+            llm=ctx.llm,
+            prompt=ctx.prompt,
+            state=state,
+            agent=ctx.active_agent,
+            operation="blog_generation"
+        )
+        metadata = getattr(
+        result,
+        "response_metadata",
+        {}
+        )
 
-        result = ctx.llm.invoke(ctx.prompt)
+        print("\n========== LLM METADATA ==========")
+        print(metadata)
+        print("==================================\n")
 
         blog_content = result.content.strip()
 
@@ -187,14 +216,15 @@ def blog_writer_agent_stream(state: AgentState):
         blog_content = ""
 
         for chunk in LLMService.stream(
-            ctx.llm,
-            ctx.prompt,
+        ctx.llm,
+        ctx.prompt,
+        state=state,
+        agent=ctx.active_agent,
+        operation="blog_generation_stream",
         ):
-
             blog_content += chunk
 
             yield chunk
-
         # Save the completed state
         finalize_blog_generation(
             state,

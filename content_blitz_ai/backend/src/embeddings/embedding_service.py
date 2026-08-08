@@ -3,9 +3,9 @@ import logging
 from src.embeddings.providers.gemini_provider import (
     GeminiEmbeddingProvider,
 )
-from src.embeddings.providers.sentence_transformer_provider import (
-    SentenceTransformerProvider,
-)
+# from src.embeddings.providers.sentence_transformer_provider import (
+#     SentenceTransformerProvider,
+# )
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class EmbeddingService:
 
     def __init__(self):
         self.primary = GeminiEmbeddingProvider()
-        self.fallback = SentenceTransformerProvider()
+        # self.fallback = SentenceTransformerProvider()
 
     def embed(
         self,
@@ -30,7 +30,7 @@ class EmbeddingService:
                 f"Primary embedding provider failed: {e}"
             )
 
-            return self.fallback.embed(text)
+            raise
 
     def embed_batch(
         self,
@@ -46,4 +46,4 @@ class EmbeddingService:
                 f"Primary embedding provider failed: {e}"
             )
 
-            return self.fallback.embed_batch(texts)
+            raise

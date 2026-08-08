@@ -13,6 +13,7 @@ from src.core.workflow_utils import (
     add_error,
     validate_query
 )
+from src.core.llm_service import LLMService
 
 from src.core.config import CLAUDE_MODEL
 import time
@@ -63,7 +64,13 @@ def query_handler(state: AgentState) -> AgentState:
 User Query: {query}
 """
     
-        intent = llm.invoke(prompt)
+        intent = LLMService.invoke(
+            llm=llm,
+            prompt=prompt,
+            state=state,
+            agent=active_agent,
+            operation="intent_classification"
+        )
 
         response_text = str(
         intent.content

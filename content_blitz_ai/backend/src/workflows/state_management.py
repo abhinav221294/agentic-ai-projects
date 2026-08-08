@@ -89,6 +89,8 @@ class AgentState(TypedDict):
     # =========================
     # ROUTING / TRACE
     # =========================
+    trace_id: str
+    
     trace: List[Dict[str, Any]]
 
     category: Optional[str]
@@ -183,6 +185,7 @@ def set_state(
     if add_trace and trace_action:
 
         state.setdefault("trace", []).append({
+            "trace_id": state.get("trace_id"),
             "agent": agent,
             "action": trace_action,
             "timestamp": time.time(),

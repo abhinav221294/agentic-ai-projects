@@ -2,7 +2,7 @@ from pathlib import Path
 import base64
 import uuid
 from openai import OpenAI
-from src.core.config import APP_BASE_URL
+from src.core.config import APP_BASE_URL,IMAGE_MODEL
 client = OpenAI()
 
 BASE_DIR = Path(__file__).resolve().parents[2]   # backend
@@ -14,7 +14,7 @@ IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 def generate_image(prompt: str):
 
     response = client.images.generate(
-        model="gpt-image-1",
+        model=IMAGE_MODEL,
         prompt=prompt,
         size="1024x1024",
     )

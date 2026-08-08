@@ -11,14 +11,16 @@ from src.tools.utility_tools import (
     word_count_tool
 )
 
+
 from src.core.workflow_utils import (
     add_trace,
     add_error,
-    validate_query
+    validate_query,
+    invoke_tool_with_trace
 )
 
 from src.core.config import (LINKEDIN_GENERATED,LINKEDIN_COMPLETED,
- LINKEDIN_VALIDATION_FAILED,LINKEDIN_FAILED,LOW_CONFIDENCE,HIGH_CONFIDENCE,
+LINKEDIN_FAILED,LOW_CONFIDENCE,HIGH_CONFIDENCE,
  LINKEDIN_STARTED,LINKEDIN_STRUCTURE_GENERATED)
 
 from src.core.prompt_builder import build_prompt_context
@@ -67,8 +69,12 @@ def prepare_linkedin_generation(
         action=LINKEDIN_STARTED,
     )
 
-    hook = linkedin_hook_tool.invoke(
-        {"topic": query}
+    hook = invoke_tool_with_trace(
+        state=state,
+        tool=linkedin_hook_tool,
+        tool_input={"topic": query},
+        agent=active_agent,
+        operation="generate_hook"
     )
 
     cta = generate_cta_tool.invoke(
@@ -158,7 +164,23 @@ def linkedin_writer_agent(state: AgentState) -> AgentState:
 
         ctx = prepare_linkedin_generation(state)
 
-        result = ctx.llm.invoke(ctx.prompt)
+        result = LLMService.invoke(
+            llm=ctx.llm,
+            prompt=ctx.prompt,
+            state=state,
+            agent=ctx.active_agent,
+            operation="linkedin_generation",
+        )
+
+        metadata = getattr(
+        result,
+        "response_metadata",
+        {}
+        )
+
+        print("\n========== LLM METADATA ==========")
+        print(metadata)
+        print("==================================\n")
 
         linkedin_post = result.content.strip()
 
@@ -198,8 +220,11 @@ def linkedin_writer_agent_stream(state: AgentState):
         linkedin_post = ""
 
         for chunk in LLMService.stream(
-            ctx.llm,
-            ctx.prompt,
+        ctx.llm,
+        ctx.prompt,
+        state=state,
+        agent=ctx.active_agent,
+        operation="linkedin_generation_stream",
         ):
             linkedin_post += chunk
             yield chunk

@@ -8,7 +8,8 @@ load_dotenv()
 # ======================
 
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-5-haiku-latest")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+IMAGE_MODEL = os.getenv("IMAGE_MODEL", "gpt-image-1")
 
 #print("CLAUDE_MODEL =", CLAUDE_MODEL)
 

@@ -30,4 +30,16 @@ def perplexity_search(
         ]
     )
 
-    return response.choices[0].message.content
+    content = response.choices[0].message.content
+    citations = response.citations or []
+
+    return {
+        "results": [
+            {
+                "title": "Perplexity Research",
+                "content": content,
+                "citations": citations
+            }
+        ]
+    }
+

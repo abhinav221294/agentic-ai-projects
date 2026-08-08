@@ -3,7 +3,8 @@ from src.prompts.prompt import IMAGE_PROMPT,GLOBAL_GUARDRAILS
 from src.core.workflow_utils import (
     add_trace,
     add_error,
-    validate_query
+    validate_query,
+    invoke_tool_with_trace
 )
 
 from src.tools.image_tools import image_generation_tool
@@ -60,9 +61,13 @@ def image_agent(state: AgentState) -> AgentState:
 User Query:
 {query}""".strip()
         
-        image_url = image_generation_tool.invoke(
-        {"prompt": prompt}
-        )
+        image_url = invoke_tool_with_trace(
+        state=state,
+        tool=image_generation_tool,
+        tool_input={"prompt": prompt},
+        agent=active_agent,
+        operation="image_generation",
+        )   
         
 
         add_trace(
