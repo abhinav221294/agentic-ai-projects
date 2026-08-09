@@ -116,8 +116,8 @@ Retrieved Research:
     agent="research_agent",
     operation="research_synthesis",
     )
-
-    print("METADATA:", response.metadata)
+    metadata = getattr(response, "metadata", {})
+    print("METADATA:", metadata)
 
     if isinstance(response.content, list):
 
@@ -131,7 +131,7 @@ Retrieved Research:
         final_answer = str(response.content).strip()
 
     print("SYNTHESIS FINISH REASON:",
-      response.metadata.get("finish_reason"))
+      metadata.get("finish_reason"))
 
     return final_answer
 

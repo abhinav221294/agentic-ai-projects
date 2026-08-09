@@ -1,0 +1,90 @@
+[
+  {
+    "id": "tool_001",
+    "agent": "blog_writer_agent",
+    "operation": "generate_title",
+    "input": {
+      "topic": "Agentic AI"
+    },
+    "expected_tool": "generate_title_tool",
+    "category": "basic"
+  },
+  {
+    "id": "tool_002",
+    "agent": "blog_writer_agent",
+    "operation": "generate_outline",
+    "input": {
+      "topic": "RAG"
+    },
+    "expected_tool": "blog_outline_tool",
+    "category": "basic"
+  },
+  {
+    "id": "tool_003",
+    "agent": "linkedin_writer_agent",
+    "operation": "generate_hook",
+    "input": {
+      "topic": "Generative AI"
+    },
+    "expected_tool": "linkedin_hook_tool",
+    "category": "basic"
+  },
+  {
+    "id": "tool_004",
+    "agent": "linkedin_writer_agent",
+    "operation": "generate_cta",
+    "input": {
+      "content_type": "linkedin"
+    },
+    "expected_tool": "generate_cta_tool",
+    "category": "basic"
+  },
+  {
+    "id": "tool_005",
+    "agent": "research_agent",
+    "operation": "web_search",
+    "input": {
+      "query": "latest agentic AI developments"
+    },
+    "expected_tool": "web_search_tool",
+    "category": "research"
+  },
+  {
+    "id": "tool_006",
+    "agent": "image_agent",
+    "operation": "image_generation",
+    "input": {
+      "prompt": "futuristic AI agent"
+    },
+    "expected_tool": "image_generation_tool",
+    "category": "image"
+  },
+  {
+    "id": "tool_007",
+    "agent": "blog_writer_agent",
+    "operation": "generate_title",
+    "input": {
+      "topic": ""
+    },
+    "expected_tool": "NO_TOOL",
+    "category": "empty_input"
+  },
+  {
+    "id": "tool_008",
+    "agent": "unknown_agent",
+    "operation": "unknown_operation",
+    "input": {},
+    "expected_tool": "NO_TOOL",
+    "category": "invalid_agent"
+  },
+  {
+    "id": "tool_009",
+    "agent": "blog_writer_agent",
+    "operation": "generate_title",
+    "input": {
+      "topic": null
+    },
+    "expected_tool": "NO_TOOL",
+    "category": "null_input"
+  }
+]

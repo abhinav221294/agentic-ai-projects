@@ -1,0 +1,24 @@
+{
+  "version": "0.1",
+  "purpose": "Behavioral evaluation dataset for Content Blitz AI",
+  "categories": [
+    "intent",
+    "research_decision",
+    "tool_calling",
+    "routing",
+    "llm_output",
+    "research",
+    "strategy",
+    "content",
+    "end_to_end"
+  ],
+  "case_types": [
+    "basic",
+    "ambiguous",
+    "edge",
+    "invalid",
+    "adversarial",
+    "failure"
+  ],
+  "note": "Curated baseline, not literally exhaustive. Expand from new failure modes and production traces."
+}

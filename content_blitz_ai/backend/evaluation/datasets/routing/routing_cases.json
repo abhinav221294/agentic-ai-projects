@@ -1,0 +1,87 @@
+[
+  {
+    "id": "route_001",
+    "state": {
+      "current_intent": "blog"
+    },
+    "expected_route": "research_decision",
+    "category": "basic"
+  },
+  {
+    "id": "route_002",
+    "state": {
+      "current_intent": "linkedin"
+    },
+    "expected_route": "research_decision",
+    "category": "basic"
+  },
+  {
+    "id": "route_003",
+    "state": {
+      "current_intent": "image"
+    },
+    "expected_route": "image_generation",
+    "category": "basic"
+  },
+  {
+    "id": "route_004",
+    "state": {
+      "current_intent": "unknown"
+    },
+    "expected_route": "fallback",
+    "category": "fallback"
+  },
+  {
+    "id": "route_005",
+    "state": {
+      "current_intent": "blog",
+      "requires_research": true
+    },
+    "expected_route": "research",
+    "category": "research_required"
+  },
+  {
+    "id": "route_006",
+    "state": {
+      "current_intent": "blog",
+      "requires_research": false
+    },
+    "expected_route": "strategist",
+    "category": "research_not_required"
+  },
+  {
+    "id": "route_007",
+    "state": {
+      "current_intent": "linkedin",
+      "requires_research": true
+    },
+    "expected_route": "research",
+    "category": "research_required"
+  },
+  {
+    "id": "route_008",
+    "state": {
+      "current_intent": "linkedin",
+      "requires_research": false
+    },
+    "expected_route": "strategist",
+    "category": "research_not_required"
+  },
+  {
+    "id": "route_009",
+    "state": {
+      "current_intent": "image",
+      "requires_research": true
+    },
+    "expected_route": "image_generation",
+    "category": "intent_priority"
+  },
+  {
+    "id": "route_010",
+    "state": {
+      "current_intent": null
+    },
+    "expected_route": "fallback",
+    "category": "missing_intent"
+  }
+]

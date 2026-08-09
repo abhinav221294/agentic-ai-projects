@@ -1,0 +1,86 @@
+[
+  {
+    "id": "llm_001",
+    "task": "research_decision",
+    "output": "RESEARCH",
+    "expected": "valid",
+    "category": "valid"
+  },
+  {
+    "id": "llm_002",
+    "task": "research_decision",
+    "output": "NO_RESEARCH",
+    "expected": "valid",
+    "category": "valid"
+  },
+  {
+    "id": "llm_003",
+    "task": "research_decision",
+    "output": "research",
+    "expected": "valid_after_normalization",
+    "category": "case_variation"
+  },
+  {
+    "id": "llm_004",
+    "task": "research_decision",
+    "output": "RESEARCH PLEASE",
+    "expected": "invalid",
+    "category": "extra_text"
+  },
+  {
+    "id": "llm_005",
+    "task": "research_decision",
+    "output": "",
+    "expected": "invalid",
+    "category": "empty"
+  },
+  {
+    "id": "llm_006",
+    "task": "research_decision",
+    "output": "MAYBE",
+    "expected": "invalid",
+    "category": "unexpected_value"
+  },
+  {
+    "id": "llm_007",
+    "task": "intent_classification",
+    "output": "blog",
+    "expected": "valid",
+    "category": "valid"
+  },
+  {
+    "id": "llm_008",
+    "task": "intent_classification",
+    "output": "Here is the answer: blog",
+    "expected": "invalid_or_needs_parsing",
+    "category": "extra_text"
+  },
+  {
+    "id": "llm_009",
+    "task": "strategy_generation",
+    "output": "{\"title\":\"RAG\",\"sections\":[\"Intro\",\"Architecture\"]}",
+    "expected": "valid_json",
+    "category": "valid"
+  },
+  {
+    "id": "llm_010",
+    "task": "strategy_generation",
+    "output": "not valid json",
+    "expected": "invalid_json",
+    "category": "malformed"
+  },
+  {
+    "id": "llm_011",
+    "task": "content_generation",
+    "output": "",
+    "expected": "invalid",
+    "category": "empty"
+  },
+  {
+    "id": "llm_012",
+    "task": "content_generation",
+    "output": "A useful article about RAG.",
+    "expected": "valid",
+    "category": "minimal_valid"
+  }
+]

@@ -77,8 +77,12 @@ def prepare_linkedin_generation(
         operation="generate_hook"
     )
 
-    cta = generate_cta_tool.invoke(
-        {"content_type": "linkedin"}
+    cta = invoke_tool_with_trace(
+    state=state,
+    tool=generate_cta_tool,
+    tool_input={"content_type": "linkedin"},
+    agent=active_agent,
+    operation="generate_cta",
     )
 
     add_trace(
@@ -128,10 +132,14 @@ def finalize_linkedin_generation(
     start: float,
 ) -> AgentState:
 
-    word_count = word_count_tool.invoke(
-        {"text": linkedin_post}
+    word_count = invoke_tool_with_trace(
+    state=state,
+    tool=word_count_tool,
+    tool_input={"text": linkedin_post},
+    agent=ctx.active_agent,
+    operation="word_count",
     )
-
+    
     add_trace(
         state,
         agent=ctx.active_agent,

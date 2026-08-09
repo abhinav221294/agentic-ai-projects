@@ -1,7 +1,7 @@
 from google import genai
 
 from src.embeddings.base import BaseEmbeddingProvider
-from src.core.config import GOOGLE_API_KEY
+from src.core.config import GOOGLE_API_KEY,EMBEDDING_MODEL, VECTOR_DIMENSION
 
 
 class GeminiEmbeddingProvider(BaseEmbeddingProvider):
@@ -11,7 +11,7 @@ class GeminiEmbeddingProvider(BaseEmbeddingProvider):
             api_key = GOOGLE_API_KEY
         )
 
-        self.model = "gemini-embedding-001"
+        self.model = EMBEDDING_MODEL
     
     def embed(
         self,
@@ -21,7 +21,7 @@ class GeminiEmbeddingProvider(BaseEmbeddingProvider):
             model=self.model,
             contents=text,
              config={
-                "output_dimensionality": 3072
+                "output_dimensionality": VECTOR_DIMENSION
                 }
         )
 
@@ -35,7 +35,7 @@ class GeminiEmbeddingProvider(BaseEmbeddingProvider):
             model=self.model,
             contents=texts,
             config={
-            "output_dimensionality": 3072
+            "output_dimensionality": VECTOR_DIMENSION
             }
         )
 

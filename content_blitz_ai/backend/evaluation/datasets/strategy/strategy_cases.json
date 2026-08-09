@@ -1,0 +1,56 @@
+[
+  {
+    "id": "strategy_001",
+    "input": "Write a detailed blog about Agentic AI",
+    "expected": {
+      "has_title": true,
+      "has_audience": true,
+      "has_sections": true,
+      "relevant": true
+    },
+    "category": "basic"
+  },
+  {
+    "id": "strategy_002",
+    "input": "Write a beginner-friendly blog about RAG",
+    "expected": {
+      "audience_level": "beginner",
+      "relevant": true
+    },
+    "category": "audience_constraint"
+  },
+  {
+    "id": "strategy_003",
+    "input": "Write a technical blog about agent architecture for ML engineers",
+    "expected": {
+      "audience": "ML engineers",
+      "technical_depth": "high"
+    },
+    "category": "audience_constraint"
+  },
+  {
+    "id": "strategy_004",
+    "input": "Write a LinkedIn post about my new AI project",
+    "expected": {
+      "format": "linkedin",
+      "concise": true
+    },
+    "category": "format_constraint"
+  },
+  {
+    "id": "strategy_005",
+    "input": "Write a blog with no sections",
+    "expected": {
+      "must_follow_constraint": true
+    },
+    "category": "explicit_constraint"
+  },
+  {
+    "id": "strategy_006",
+    "input": "",
+    "expected": {
+      "valid": false
+    },
+    "category": "invalid"
+  }
+]

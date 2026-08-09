@@ -1,0 +1,71 @@
+[
+  {
+    "id": "content_blog_001",
+    "type": "blog",
+    "input": "Write a detailed blog about Agentic AI",
+    "criteria": [
+      "relevance",
+      "structure",
+      "accuracy",
+      "completeness",
+      "instruction_following"
+    ],
+    "category": "basic"
+  },
+  {
+    "id": "content_blog_002",
+    "type": "blog",
+    "input": "Write a beginner-friendly blog about RAG",
+    "criteria": [
+      "beginner_readability",
+      "accuracy",
+      "structure"
+    ],
+    "category": "audience"
+  },
+  {
+    "id": "content_blog_003",
+    "type": "blog",
+    "input": "Write a technical blog about RAG architecture for ML engineers",
+    "criteria": [
+      "technical_depth",
+      "accuracy",
+      "architecture_detail"
+    ],
+    "category": "technical"
+  },
+  {
+    "id": "content_linkedin_001",
+    "type": "linkedin",
+    "input": "Create a LinkedIn post about Agentic AI",
+    "criteria": [
+      "hook",
+      "conciseness",
+      "professional_tone",
+      "cta",
+      "relevance"
+    ],
+    "category": "basic"
+  },
+  {
+    "id": "content_linkedin_002",
+    "type": "linkedin",
+    "input": "Create a LinkedIn post announcing an AI project",
+    "criteria": [
+      "announcement_clarity",
+      "professional_tone",
+      "engagement"
+    ],
+    "category": "announcement"
+  },
+  {
+    "id": "content_image_001",
+    "type": "image",
+    "input": "Generate a futuristic AI agent visual",
+    "criteria": [
+      "prompt_relevance",
+      "instruction_following"
+    ],
+    "category": "basic"
+  }
+]

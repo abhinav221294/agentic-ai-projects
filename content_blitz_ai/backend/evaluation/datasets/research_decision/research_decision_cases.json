@@ -1,0 +1,128 @@
+[
+  {
+    "id": "research_001",
+    "input": "What are the latest developments in agentic AI?",
+    "expected": {
+      "research_decision": "RESEARCH"
+    },
+    "category": "fresh_information",
+    "priority": "high"
+  },
+  {
+    "id": "research_002",
+    "input": "Write a blog explaining the current state of RAG in 2026",
+    "expected": {
+      "research_decision": "RESEARCH"
+    },
+    "category": "fresh_information",
+    "priority": "high"
+  },
+  {
+    "id": "research_003",
+    "input": "Compare the latest Gemini and Claude models",
+    "expected": {
+      "research_decision": "RESEARCH"
+    },
+    "category": "fresh_information",
+    "priority": "high"
+  },
+  {
+    "id": "research_004",
+    "input": "Write a blog explaining what an LLM is",
+    "expected": {
+      "research_decision": "NO_RESEARCH"
+    },
+    "category": "stable_knowledge",
+    "priority": "high"
+  },
+  {
+    "id": "research_005",
+    "input": "Create a LinkedIn post explaining Python decorators",
+    "expected": {
+      "research_decision": "NO_RESEARCH"
+    },
+    "category": "stable_knowledge",
+    "priority": "high"
+  },
+  {
+    "id": "research_006",
+    "input": "Write a beginner blog explaining binary search",
+    "expected": {
+      "research_decision": "NO_RESEARCH"
+    },
+    "category": "stable_knowledge",
+    "priority": "high"
+  },
+  {
+    "id": "research_007",
+    "input": "Write about today's AI news",
+    "expected": {
+      "research_decision": "RESEARCH"
+    },
+    "category": "time_sensitive",
+    "priority": "high"
+  },
+  {
+    "id": "research_008",
+    "input": "What changed in Databricks this week?",
+    "expected": {
+      "research_decision": "RESEARCH"
+    },
+    "category": "time_sensitive",
+    "priority": "high"
+  },
+  {
+    "id": "research_009",
+    "input": "Write about a topic",
+    "expected": {
+      "research_decision": "NO_RESEARCH"
+    },
+    "category": "underspecified",
+    "priority": "high"
+  },
+  {
+    "id": "research_010",
+    "input": "",
+    "expected": {
+      "research_decision": "NO_RESEARCH"
+    },
+    "category": "invalid",
+    "priority": "high"
+  },
+  {
+    "id": "research_011",
+    "input": "Write a blog about AI using only your existing knowledge; do not browse.",
+    "expected": {
+      "research_decision": "NO_RESEARCH"
+    },
+    "category": "explicit_constraint",
+    "priority": "high"
+  },
+  {
+    "id": "research_012",
+    "input": "Research the latest pricing of major LLM APIs and summarize it",
+    "expected": {
+      "research_decision": "RESEARCH"
+    },
+    "category": "explicit_research",
+    "priority": "high"
+  },
+  {
+    "id": "research_013",
+    "input": "Tell me what happened yesterday in the AI industry",
+    "expected": {
+      "research_decision": "RESEARCH"
+    },
+    "category": "time_sensitive",
+    "priority": "high"
+  },
+  {
+    "id": "research_014",
+    "input": "Explain the concept of vector databases",
+    "expected": {
+      "research_decision": "NO_RESEARCH"
+    },
+    "category": "stable_knowledge",
+    "priority": "high"
+  }
+]

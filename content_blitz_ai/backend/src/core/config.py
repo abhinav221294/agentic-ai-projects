@@ -3,13 +3,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ======================
-# MODEL CONFIGURATION
-# ======================
 
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-5-haiku-latest")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-IMAGE_MODEL = os.getenv("IMAGE_MODEL", "gpt-image-1")
+
 
 #print("CLAUDE_MODEL =", CLAUDE_MODEL)
 
@@ -134,17 +129,24 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
-
 # ==========================================
 # Models
 # ==========================================
 
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL")
-EMBEDDING_MODEL = os.getenv(
-    "EMBEDDING_MODEL",
-    "gemini-embedding-001"
-)
+# ======================
+# MODEL CONFIGURATION
+# ======================
+
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-5-haiku-latest")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+IMAGE_MODEL = os.getenv("IMAGE_MODEL", "gpt-image-1")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
+VECTOR_DIMENSION = 3072
+
+EVALUATION_LLM_MODEL = "gemini-3.5-flash"
+EVALUATION_LLM_TEMPERATURE = 0
+EVALUATION_LLM_MAX_TOKENS = 1000
+EVALUATION_EMBEDDING_MODEL = "models/text-embedding-004"
 
 # ==========================================
 # Redis

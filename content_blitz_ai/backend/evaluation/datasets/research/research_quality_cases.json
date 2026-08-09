@@ -1,0 +1,56 @@
+[
+  {
+    "id": "rq_001",
+    "query": "latest agentic AI developments",
+    "expected": {
+      "query_relevance": 5,
+      "source_relevance": 5,
+      "synthesis_grounded": true
+    },
+    "category": "high_quality"
+  },
+  {
+    "id": "rq_002",
+    "query": "current LLM API pricing",
+    "expected": {
+      "query_relevance": 5,
+      "source_relevance": 5,
+      "synthesis_grounded": true
+    },
+    "category": "high_quality"
+  },
+  {
+    "id": "rq_003",
+    "query": "stable definition of vector database",
+    "expected": {
+      "query_relevance": 4
+    },
+    "category": "possibly_no_research"
+  },
+  {
+    "id": "rq_004",
+    "query": "latest AI news",
+    "expected": {
+      "query_relevance": 5,
+      "fresh_sources_required": true
+    },
+    "category": "freshness"
+  },
+  {
+    "id": "rq_005",
+    "query": "latest Databricks changes this week",
+    "expected": {
+      "query_relevance": 5,
+      "fresh_sources_required": true
+    },
+    "category": "freshness"
+  },
+  {
+    "id": "rq_006",
+    "query": "ambiguous topic",
+    "expected": {
+      "query_relevance": 2
+    },
+    "category": "ambiguous"
+  }
+]
