@@ -9,12 +9,12 @@ def gemini_llm_client(
     max_retries=2
 ):
 
-    print("\n========== GEMINI CONFIG ==========")
-    print("model:", model)
-    print("temperature:", temperature)
-    print("max_tokens:", max_tokens)
-    print("timeout:", timeout)
-    print("===================================\n")
+    #print("\n========== GEMINI CONFIG ==========")
+    #print("model:", model)
+    #print("temperature:", temperature)
+    #print("max_tokens:", max_tokens)
+    #print("timeout:", timeout)
+    #print("===================================\n")
 
     return ChatGoogleGenerativeAI(
         model=model,
