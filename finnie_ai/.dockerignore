@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+
+# Virtual environments
+finn_env/
+venv/
+yf_env/
+*/finn_env/
+*/yf_env/
+
+# Tests
+tests/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Documentation / images
+README.md
+*.png
+
+# Streamlit
+.streamlit/
