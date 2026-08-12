@@ -27,7 +27,7 @@ Place the agentic architecture diagram in the project at:
 docs/agentic_architecture.png
 ```
 
-![Content Blitz AI Agentic Architecture](docs/agentic_architecture.png)
+![Content Blitz AI Agentic Architecture](content_blitz_architecture.png)
 
 ------------------------------------------------------------------------
 
@@ -41,7 +41,7 @@ Place the AWS architecture diagram in the project at:
 docs/aws_architecture.png
 ```
 
-![Content Blitz AI AWS Architecture](docs/aws_architecture.png)
+![Content Blitz AI AWS Architecture](Content%20Blitz%20AI%20AWS%20Architecture.png)
 
 ------------------------------------------------------------------------
 
