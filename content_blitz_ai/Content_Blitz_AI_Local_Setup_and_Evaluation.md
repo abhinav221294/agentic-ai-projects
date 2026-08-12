@@ -18,8 +18,8 @@ You also need API keys for the external AI and research services.
 ## 2. Clone the Repository
 
 ``` bash
-git clone <YOUR_GITHUB_REPOSITORY_URL>
-cd content_blitz_ai
+git clone git clone https://github.com/abhinav221294/agentic-ai-projects.git
+cd agentic-ai-projects/content_blitz_ai
 ```
 
 ------------------------------------------------------------------------
