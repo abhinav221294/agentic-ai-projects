@@ -230,8 +230,7 @@ def llm_judge(query, answer, contexts):
 
     context_text = "\n\n".join(contexts)
 
-    prompt = f"""
-You are an evaluator for a research agent.
+    prompt = f"""You are an evaluator for a research agent.
 
 Evaluate the answer using the retrieved context.
 
@@ -254,8 +253,7 @@ Return ONLY valid JSON:
 Scoring:
 - relevance: How well the answer addresses the user query.
 - groundedness: How well the answer is supported by the retrieved context.
-- Scores must be between 0 and 1.
-"""
+- Scores must be between 0 and 1."""
 
     evaluator_llm = gemini_llm_client(
         model=EVALUATION_LLM_MODEL,

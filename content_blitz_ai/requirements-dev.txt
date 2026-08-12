@@ -109,3 +109,16 @@ langsmith==0.4.14
 # OPTIONAL TOKEN COUNTING
 # =========================
 tiktoken==0.11.0
+
+# =========================
+# ML METRICS / EVALUATION
+# =========================
+scikit-learn==1.7.1
+ragas==0.2.15
+grandalf
+
+# =========================
+# EMBEDDINGS
+# =========================
+sentence-transformers==5.1.0
+

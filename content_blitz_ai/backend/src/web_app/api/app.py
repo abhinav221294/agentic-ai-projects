@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from src.core.lifespan import lifespan
 from src.web_app.api.routes import router as api_router
 from src.auth.routes import router as auth_router
+from src.core.config import CORS_ORIGINS
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -29,10 +30,7 @@ app.mount(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

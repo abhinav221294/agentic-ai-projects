@@ -186,3 +186,9 @@ APP_BASE_URL = os.getenv(
     "APP_BASE_URL",
     "http://127.0.0.1:8000",
 )
+
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "").split(",")
+    if origin.strip()
+]
