@@ -75,7 +75,7 @@ The application uses **LangGraph** to orchestrate the multi-agent workflow.
 
 ### Agentic Architecture Diagram
 
-**[INSERT AGENTIC ARCHITECTURE DIAGRAM HERE]**
+![Content Blitz AI Agentic Architecture](content_blitz_architecture.png)
 
 > Replace this placeholder with:
 >
@@ -131,7 +131,7 @@ Content Blitz AI is containerized and designed for deployment on AWS using manag
 
 ### AWS Architecture Diagram
 
-**[INSERT AWS ARCHITECTURE DIAGRAM HERE]**
+![Content Blitz AI AWS Architecture](Content%20Blitz%20AI%20AWS%20Architecture.png)
 
 > Replace this placeholder with the AWS deployment architecture diagram.
 
