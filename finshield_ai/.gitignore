@@ -27,3 +27,5 @@ __pycache__/
 # Test files containing secrets
 test_rag.py
 finshield_ai/test_rag.py
+
+/ppt_slides
